@@ -37,7 +37,7 @@ bool LoadExecutable(const std::string& exePath)
     PIMAGE_DOS_HEADER imgHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(exeBase);
     if (!exeBase || !CheckMagicHeader(imgHeader))
     {
-        free(exeBase);
+        
         return false;
     }
 
@@ -45,6 +45,18 @@ bool LoadExecutable(const std::string& exePath)
 
     PIMAGE_FILE_HEADER fileHeader = &ntHeader->FileHeader;
     PIMAGE_OPTIONAL_HEADER optionalHeader = &ntHeader->OptionalHeader;
+
+    LPVOID imgBase = VirtualAlloc((LPVOID) optionalHeader->ImageBase, 
+                                    optionalHeader->SizeOfImage,
+                             MEM_COMMIT | MEM_RESERVE, 
+                                  PAGE_READWRITE);
+
+    if (!imgBase)
+    {
+        free(exeBase);
+        return false;
+    }
+        
 
 }
 
