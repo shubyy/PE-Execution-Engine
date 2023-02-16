@@ -25,6 +25,8 @@ public:
 
 	void AllocAndLoadSections(LPVOID fileBase, PIMAGE_NT_HEADERS ntHeader);
 
+
+
 	bool LoadExecutable(const std::string& exePath);
 
 	Executable(const std::string& path);
