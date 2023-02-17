@@ -17,6 +17,9 @@ public:
 	PIMAGE_FILE_HEADER fileHeader;
 	PIMAGE_OPTIONAL_HEADER optionalHeader;
 
+	uint64_t EmulationStart;
+	uint64_t EmulationEnd;
+
 	bool bInitialised;
 
 	LPVOID MapFileIntoMemory(const std::string& exePath);

@@ -64,6 +64,10 @@ bool Executable::LoadExecutable(const std::string& exePath)
     AllocAndLoadSections(fileBase, ntHeader);
     if (!imgBase)
         return false;
+
+    EmulationStart = (uint64_t) imgBase + optionalHeader->AddressOfEntryPoint;
+
+    return true;
 }
 
 
