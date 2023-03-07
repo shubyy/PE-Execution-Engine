@@ -1,28 +1,35 @@
 #include <iostream>
+#include <string>
 #include <format>
+#include <vector>
+#include <iomanip> 
 
 #include "unicorn/unicorn.h"
 #include "Executable.h"
 #include "EmulatorHooks.h"
+#include "KernelDriverExecutionEngine.h"
 
-uint64_t END_ADDRESS = 0x00;
+#define LOAD_ADDRESS 0x140000000
 
-int roundUp(int numToRound, int multiple)
-{
-    if (multiple == 0)
-        return numToRound;
+uint64_t END_ADDRESS = ULLONG_MAX;
+uint64_t stack_top = 0x0;
+uint64_t stack_bottom = 0x0;
+uint64_t param_1_driverObject = 0x0;
+uint64_t param_2_registryPath = 0x0;
 
-    int remainder = numToRound % multiple;
-    if (remainder == 0)
-        return numToRound;
-
-    return numToRound + multiple - remainder;
-}
+std::vector <uint64_t> emulator_breakpoints = {
+    //0x140C1913A,
+    //0x140C19143,
+    //0x140C19180,
+    //0x140C827C0,
+    //0x140C827C9
+};
 
 uc_engine * SetupEmulator(const Executable& exec)
 {
     uc_engine* uc;
     uc_err err;
+    uc_hook trace2;
 
     err = uc_open(UC_ARCH_X86, UC_MODE_64, &uc);
     if (err != UC_ERR_OK)
@@ -31,85 +38,99 @@ uc_engine * SetupEmulator(const Executable& exec)
         return NULL;
     }
 
-    size_t uc_mem_size = roundUp((int) exec.imgSize, 4096);
+    uint64_t uc_mem_size = roundUp((int) exec.imgSize, 4096);
     //Allocate space for executable in unicorn
-    uc_mem_map(uc, exec.optionalHeader->ImageBase, uc_mem_size, uc_prot::UC_PROT_ALL);
-    if (uc_mem_write(uc, exec.optionalHeader->ImageBase, exec.imgBase, exec.imgSize) != UC_ERR_OK)
+    uc_mem_map(uc, exec.EmulationImageBase, uc_mem_size, uc_prot::UC_PROT_ALL);
+    if (uc_mem_write(uc, exec.EmulationImageBase, exec.imgBase, exec.imgSize) != UC_ERR_OK)
     {
         std::cout << "Failed to write to memory" << std::endl;
         return NULL;
     }
 
-    //Find suitable stack location
-    long long startStackAddress = 0x7ff000000;
-    while (abs(startStackAddress - (long long)exec.optionalHeader->ImageBase) < 0x8ffff)
-    {
-        startStackAddress += 4096;
-        if (startStackAddress > 0xffffffffffff)
-        {
-            uc_close(uc);
-            return NULL;
-        } 
-    }
+    //Choose Heap and Stack
+    stack_bottom = roundUp(exec.EmulationImageBase + uc_mem_size + 0xFF0000, 0x1000);
+    uint64_t initial_stack_Size = 32 * 1024;
 
-    size_t initialStackSize = 1024 * 1024;
-    long long allocateAddress = startStackAddress - initialStackSize;
+    uint64_t sysRange_bottom = roundUp(exec.EmulationImageBase - 0xff00000000, 0x1000);
+    uint64_t initial_sys_range = 4 * 1024 * 1024;
 
+    stack_top = stack_bottom + initial_stack_Size;
 
     //Allocate stack of executable
-    uc_mem_map(uc, allocateAddress, initialStackSize, UC_PROT_READ | UC_PROT_WRITE);
-    uint64_t r_rsp = startStackAddress - 64;
-    uint64_t r_rbp = startStackAddress;
+    uc_mem_map(uc, stack_bottom, initial_stack_Size, uc_prot::UC_PROT_ALL);
+
+    //Allocate system range
+    uc_mem_map(uc, sysRange_bottom, initial_sys_range, uc_prot::UC_PROT_ALL);
+
+    std::cout << "\Stack Bot: 0x" << (LPVOID)stack_bottom << std::endl;
+    std::cout << "Stack Top: 0x" << (LPVOID)stack_top << std::endl << std::endl;;
+
+    //Start heap at bottom and stack at top
+    uint64_t r_rsp = stack_top - 128;
+    uint64_t r_rbp = r_rsp + 64;
 
     uc_reg_write(uc, UC_X86_REG_RSP, &r_rsp);
     uc_reg_write(uc, UC_X86_REG_RBP, &r_rbp);
+
+    //Allocate Driver Object structure
+    size_t DriverObjectSize = sizeof(DRIVER_OBJECT);
+    PDRIVER_OBJECT driverObject = new DRIVER_OBJECT();
+    driverObject->Type = 0x4;
+    driverObject->Size = 0x150;
+    driverObject->Flags = 0x2;
+    driverObject->DriverStart = (LPVOID) exec.EmulationImageBase;
+    driverObject->DriverSize = exec.imgSize;
+    driverObject->DriverInit = (LPVOID) exec.EmulationStart;
+
+    const std::wstring reg_path = L"\\REGISTRY\\MACHINE\\SYSTEM\\ControlSet001\\Services\\EasyAntiCheat";
+
+    param_1_driverObject = sysRange_bottom + 0x1000;
+    param_2_registryPath = roundUp(param_1_driverObject + DriverObjectSize + 0x800, 0x16);
+
+    uc_mem_write(uc, param_1_driverObject, driverObject, DriverObjectSize);
+    uc_reg_write(uc, UC_X86_REG_RAX, &exec.EmulationStart);
+    uc_reg_write(uc, UC_X86_REG_RCX, &param_1_driverObject);
+    uc_reg_write(uc, UC_X86_REG_RDI, &param_1_driverObject);
+    uc_reg_write(uc, UC_X86_REG_R15, &param_1_driverObject);
+    uc_reg_write(uc, UC_X86_REG_RDX, &param_2_registryPath);
+
+    emulator_breakpoints.push_back(exec.EmulationStart);
 
     return uc;
 }
 
 int main(int argc, char* argv[])
 {
-    Executable exec("C:\\Users\\Shubham\\Desktop\\EAC\\EasyAntiCheat.sys");
+    Executable exec("C:\\Users\\Shubham\\Desktop\\EAC\\EasyAntiCheat.sys", LOAD_ADDRESS);
     if(exec.bInitialised)
         std::cout << "Loaded executable!" << std::endl;
 
     uc_engine *uc = SetupEmulator(exec);
     uc_err err;
     
-    uc_hook trace1;
+    uc_hook trace1, trace2, trace3, trace4;
 
     exec.EmulationEnd = END_ADDRESS;
 
-    std::cout << "Image Base Address: " << exec.imgBase << std::endl;
-    std::cout << "Emulation Start Address: " << (LPVOID) exec.EmulationStart << std::endl;
+    std::cout << "\nEmulation Start Address: " << (LPVOID) exec.EmulationStart << std::endl;
     std::cout << "Emulation End Address: " << (LPVOID) exec.EmulationEnd << std::endl;
+    std::cout << std::hex << "\nImage Mapping: 0x" << exec.EmulationImageBase << "-0x" << exec.EmulationImageBase + exec.imgSize << std::endl;
+    
+    if (!InitDisassembler(&exec))
+        return -1;
     
     uc_hook_add(uc, &trace1, UC_HOOK_CODE, hook_instruction, NULL, exec.EmulationStart, exec.EmulationEnd);
+    //uc_hook_add(uc, &trace2, UC_HOOK_MEM_VALID, hook_memory, NULL, 0, LLONG_MAX);
+    //uc_hook_add(uc, &trace3, UC_HOOK_MEM_INVALID, hook_invalid_memory, NULL, 0, LLONG_MAX);
 
     //Start Emulation
-    err = uc_emu_start(uc, exec.EmulationStart, exec.EmulationEnd, 30 * 1000000, 0);
+    err = uc_emu_start(uc, exec.EmulationStart, exec.EmulationEnd, 0 * 30 * 1000000, 0);
     if (err != UC_ERR_OK)
-        std::cout << "Failed to emulate executable\n\nState: \n" << std::endl;
+        std::cout << "\nFailed to emulate executable\n\nState: \n" << std::endl;
+    else
+        std::cout << "\nFinished Emulating Executable to desired address!\n\nState: \n" << std::endl;
 
-    std::cout << "Finished Emulating Executable to desired address!\n\nState: \n" << std::endl;
-
-    uint64_t r_rdx;
-    uint64_t r_rcx;
-    uint64_t r_rdi;
-    uint64_t r_rsi;
-    uint64_t r_rax;
-
-    uc_reg_read(uc, UC_X86_REG_RDX, &r_rdx);
-    uc_reg_read(uc, UC_X86_REG_RCX, &r_rcx);
-    uc_reg_read(uc, UC_X86_REG_RDI, &r_rdi);
-    uc_reg_read(uc, UC_X86_REG_RSI, &r_rsi);
-    uc_reg_read(uc, UC_X86_REG_RAX, &r_rax);
-
-    std::cout << std::hex << "RAX: 0x" << r_rax << std::endl;
-    std::cout << std::hex << "RCX: 0x" << r_rcx << std::endl;
-    std::cout << std::hex << "RDX: 0x" << r_rdx << std::endl;
-    std::cout << std::hex << "RDI: 0x" << r_rdi << std::endl;
-    std::cout << std::hex << "RSI: 0x" << r_rsi << std::endl;
+    print_emulator_cpu_state(uc);
 
     return 0;
 
