@@ -85,7 +85,7 @@ uc_engine * SetupEmulator(const Executable& exec)
 
     std::cout << std::hex << "\nSystem Range Mapping: 0x" << sysRange_bottom << "-0x" << sysRange_bottom + initial_sys_range << std::endl;
 
-    const std::wstring reg_path = L"\\REGISTRY\\MACHINE\\SYSTEM\\ControlSet001\\Services\\EasyAntiCheat";
+    const std::wstring reg_path = L"";
 
     param_1_driverObject = sysRange_bottom + 0x1000;
     param_2_registryPath = roundUp(param_1_driverObject + DriverObjectSize + 0x800, 0x16);
@@ -97,6 +97,8 @@ uc_engine * SetupEmulator(const Executable& exec)
     uc_reg_write(uc, UC_X86_REG_R15, &param_1_driverObject);
     uc_reg_write(uc, UC_X86_REG_RDX, &param_2_registryPath);
 
+    delete driverObject;
+
     std::cout << "\Driver Object: 0x" << (LPVOID)param_1_driverObject << std::endl;
     std::cout << "Reg Path: 0x" << (LPVOID)param_2_registryPath << std::endl;
 
@@ -107,7 +109,7 @@ uc_engine * SetupEmulator(const Executable& exec)
 
 int main(int argc, char* argv[])
 {
-    Executable exec("C:\\Users\\Shubham\\Desktop\\EAC\\EasyAntiCheat.sys", LOAD_ADDRESS);
+    Executable exec("", LOAD_ADDRESS);
     if(exec.bInitialised)
         std::cout << "Loaded executable!" << std::endl;
 
@@ -137,6 +139,20 @@ int main(int argc, char* argv[])
         std::cout << "\nFinished Emulating Executable to desired address!\n\nState: \n" << std::endl;
 
     print_emulator_cpu_state(uc);
+    std::cout << std::endl;
+
+    size_t DriverObjectSize = sizeof(DRIVER_OBJECT);
+    PDRIVER_OBJECT driverObject = new DRIVER_OBJECT();
+    if (uc_mem_read(uc, param_1_driverObject, (LPVOID)driverObject, sizeof(driverObject)) == UC_ERR_OK)
+    {
+
+        std::cout << "Driver Object Major Functions:" << std::endl;
+        int size = sizeof(driverObject->MajorFunction) / sizeof(LPVOID);
+        for (int i = 0; i < size; i++)
+            std::cout << i << ": " << (LPVOID)driverObject->MajorFunction[i] << std::endl;
+    }
+
+    delete driverObject;
 
     return 0;
 
