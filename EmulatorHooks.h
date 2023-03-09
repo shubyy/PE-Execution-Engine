@@ -3,7 +3,7 @@
 #include <string>
 
 #include "unicorn/unicorn.h"
-#include "capstone/capstone.h"
+#include "Zydis/Zydis.h"
 
 class Executable;
 
