@@ -8,6 +8,8 @@
 
 extern uint64_t stack_top;
 extern uint64_t stack_bottom;
+extern uint64_t sysRange_bottom;
+extern uint64_t sysRange_top;
 extern uint64_t param_1_driverObject;
 extern uint64_t param_2_registryPath;
 
@@ -330,9 +332,18 @@ void hook_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int size, in
 	std::string location;
 	//Get Location of Address
 	if (address >= stack_bottom && address <= stack_top)
+	{
 		location = "Stack Address: ";
-	else if (address >= (uint64_t)exec->imgBase && address <= (uint64_t)exec->imgBase + exec->imgSize)
+	}
+	else if (address >= exec->EmulationImageBase && address <= exec->EmulationImageBase + exec->imgSize)
+	{
 		location = "Image Address: ";
+	}
+	else if (address >= sysRange_bottom && address <= sysRange_top)
+	{
+		location = "System Address: ";
+	}
+		
 
 	switch (type)
 	{
@@ -340,13 +351,20 @@ void hook_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int size, in
 		std::cout << (LPVOID)r_rip << ":\tValue: " << (LPVOID)value << ":\tWritten To " << location << (LPVOID)address << "\tSize: " << (LPVOID)size << std::endl;
 		break;
 	case UC_MEM_READ:
-		
 		uc_mem_read(uc, address, &mem_value, size);
 		std::cout << (LPVOID)r_rip << ":\tValue: " << (LPVOID)mem_value << ":\tRead from " << location << (LPVOID)address << "\tSize : " << (LPVOID)size << std::endl;
 		break;
 	case UC_MEM_FETCH:
 		std::cout << (LPVOID)r_rip << ":\tValue: " << (LPVOID)value << ":\tFetched from " << location << (LPVOID)address << "\tSize: " << (LPVOID)size << std::endl;
 		break;
+	}
+}
+
+void hook_custom_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int size, int64_t value, void* user_data)
+{
+	if (address >= param_1_driverObject && address <= param_2_registryPath + 0x8)
+	{
+
 	}
 }
 

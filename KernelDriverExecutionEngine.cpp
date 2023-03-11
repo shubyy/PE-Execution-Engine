@@ -14,11 +14,14 @@
 uint64_t END_ADDRESS = ULLONG_MAX;
 uint64_t stack_top = 0x0;
 uint64_t stack_bottom = 0x0;
+uint64_t sysRange_bottom = 0x0;
+uint64_t sysRange_top = 0x0;
 uint64_t param_1_driverObject = 0x0;
 uint64_t param_2_registryPath = 0x0;
 
 std::vector <uint64_t> emulator_breakpoints = {
-    0x1401d04ea
+    //0x1405feef1 //Decode Value
+    0x1409b66e7
     //0x140C1913A,
     //0x140C19143,
     //0x140C19180,
@@ -51,11 +54,11 @@ uc_engine * SetupEmulator(const Executable& exec)
     //Choose Heap and Stack
     stack_bottom = roundUp(exec.EmulationImageBase + uc_mem_size + 0xFF0000, 0x1000);
     uint64_t initial_stack_Size = 32 * 1024;
-
-    uint64_t sysRange_bottom = roundUp(exec.EmulationImageBase - 0xff00000000, 0x1000);
-    uint64_t initial_sys_range = 4 * 1024 * 1024;
-
     stack_top = stack_bottom + initial_stack_Size;
+
+    sysRange_bottom = roundUp(exec.EmulationImageBase - 0xff00000000, 0x1000);
+    uint64_t initial_sys_range = 4 * 1024 * 1024;
+    sysRange_top = sysRange_bottom + initial_sys_range;
 
     //Allocate stack of executable
     uc_mem_map(uc, stack_bottom, initial_stack_Size, uc_prot::UC_PROT_ALL);
@@ -63,8 +66,7 @@ uc_engine * SetupEmulator(const Executable& exec)
     //Allocate system range
     uc_mem_map(uc, sysRange_bottom, initial_sys_range, uc_prot::UC_PROT_ALL);
 
-    std::cout << "\Stack Bot: 0x" << (LPVOID)stack_bottom << std::endl;
-    std::cout << "Stack Top: 0x" << (LPVOID)stack_top << std::endl;
+    std::cout << std::hex << "\Stack Range Mapping: 0x" << stack_bottom << "-0x" << stack_top << std::endl;
 
     //Start heap at bottom and stack at top
     uint64_t r_rsp = stack_top - 120;
@@ -83,11 +85,11 @@ uc_engine * SetupEmulator(const Executable& exec)
     driverObject->DriverSize = exec.imgSize;
     driverObject->DriverInit = (LPVOID) exec.EmulationStart;
 
-    std::cout << std::hex << "\nSystem Range Mapping: 0x" << sysRange_bottom << "-0x" << sysRange_bottom + initial_sys_range << std::endl;
+    std::cout << std::hex << "\nSystem Range Mapping: 0x" << sysRange_bottom << "-0x" << sysRange_top << std::endl;
 
     const std::wstring reg_path = L"";
 
-    param_1_driverObject = sysRange_bottom + 0x1000;
+    param_1_driverObject = sysRange_bottom + 0x6e0;
     param_2_registryPath = roundUp(param_1_driverObject + DriverObjectSize + 0x800, 0x16);
 
     uc_mem_write(uc, param_1_driverObject, driverObject, DriverObjectSize);
@@ -109,7 +111,7 @@ uc_engine * SetupEmulator(const Executable& exec)
 
 int main(int argc, char* argv[])
 {
-    Executable exec("", LOAD_ADDRESS);
+    Executable exec("D:\\RE\\EAC\\EasyAntiCheat.sys", LOAD_ADDRESS);
     if(exec.bInitialised)
         std::cout << "Loaded executable!" << std::endl;
 
@@ -127,7 +129,7 @@ int main(int argc, char* argv[])
     if (!InitDisassembler(&exec))
         return -1;
     
-    uc_hook_add(uc, &trace1, UC_HOOK_CODE, hook_jump_instruction, NULL, 0, LLONG_MAX);
+    uc_hook_add(uc, &trace1, UC_HOOK_CODE, hook_instruction, NULL, 0, LLONG_MAX);
     //uc_hook_add(uc, &trace2, UC_HOOK_MEM_VALID, hook_memory, NULL, 0, LLONG_MAX);
     //uc_hook_add(uc, &trace3, UC_HOOK_MEM_INVALID, hook_invalid_memory, NULL, 0, LLONG_MAX);
 
@@ -148,8 +150,8 @@ int main(int argc, char* argv[])
 
         std::cout << "Driver Object Major Functions:" << std::endl;
         int size = sizeof(driverObject->MajorFunction) / sizeof(LPVOID);
-        for (int i = 0; i < size; i++)
-            std::cout << i << ": " << (LPVOID)driverObject->MajorFunction[i] << std::endl;
+        //for (int i = 0; i < size; i++)
+            //std::cout << i << ": " << (LPVOID)driverObject->MajorFunction[i] << std::endl;
     }
 
     delete driverObject;
