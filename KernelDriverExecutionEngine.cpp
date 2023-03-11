@@ -3,13 +3,9 @@
 #include <format>
 #include <vector>
 #include <iomanip> 
-
-#include "unicorn/unicorn.h"
-#include "Executable.h"
-#include "EmulatorHooks.h"
 #include "KernelDriverExecutionEngine.h"
 
-#define LOAD_ADDRESS 0x140000000 //0xFFFFF80714CE0000 
+#define LOAD_ADDRESS 0xfffff80150fe0000 //0x140000000 //0xFFFFF80714CE0000 
 
 uint64_t END_ADDRESS = ULLONG_MAX;
 uint64_t stack_top = 0x0;
@@ -18,6 +14,10 @@ uint64_t sysRange_bottom = 0x0;
 uint64_t sysRange_top = 0x0;
 uint64_t param_1_driverObject = 0x0;
 uint64_t param_2_registryPath = 0x0;
+
+#include "unicorn/unicorn.h"
+#include "Executable.h"
+#include "EmulatorHooks.h"
 
 std::vector <uint64_t> emulator_breakpoints = {
     //0x1405feef1 //Decode Value
@@ -111,7 +111,7 @@ uc_engine * SetupEmulator(const Executable& exec)
 
 int main(int argc, char* argv[])
 {
-    Executable exec("D:\\RE\\EAC\\EasyAntiCheat.sys", LOAD_ADDRESS);
+    Executable exec("", LOAD_ADDRESS);
     if(exec.bInitialised)
         std::cout << "Loaded executable!" << std::endl;
 
