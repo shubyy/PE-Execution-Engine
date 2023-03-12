@@ -1,4 +1,5 @@
 #pragma once
+#include <Windows.h>
 
 uint64_t roundUp(uint64_t numToRound, uint64_t multiple)
 {

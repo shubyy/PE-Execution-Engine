@@ -63,7 +63,6 @@ void Executable::AllocAndLoadSections(LPVOID fileBase)
 void Executable::ApplyRelocations()
 {
     uint64_t offset = EmulationImageBase - (uint64_t)optionalHeader->ImageBase;
-    relocOffset = offset;
     if (offset)
     {
         if (optionalHeader->DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].Size >= 0)
@@ -103,7 +102,7 @@ bool Executable::LoadExecutable(const std::string& exePath)
     fileHeader = &ntHeader->FileHeader;
     optionalHeader = &ntHeader->OptionalHeader;
 
-    EmulationStart = (uint64_t)EmulationImageBase + optionalHeader->AddressOfEntryPoint + relocOffset;
+    EmulationStart = (uint64_t)EmulationImageBase + optionalHeader->AddressOfEntryPoint;
 
     AllocAndLoadSections(fileBase);
     if (!imgBase)
@@ -119,7 +118,6 @@ Executable::Executable(const std::string& path, uint64_t ImageBase)
     fileBase = NULL;
     fileSize = 0;
     imgSize = 0;
-    relocOffset = 0;
     EmulationImageBase = ImageBase;
     bInitialised = false;
 

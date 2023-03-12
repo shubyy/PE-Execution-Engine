@@ -8,7 +8,6 @@ class Executable
 public:
 	LPVOID fileBase;
 	LPVOID imgBase;
-	uint64_t relocOffset;
 
 	uint64_t EmulationImageBase;
 

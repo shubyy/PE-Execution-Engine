@@ -141,11 +141,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Emulator.cpp" />
     <ClCompile Include="EmulatorHooks.cpp" />
     <ClCompile Include="Executable.cpp" />
     <ClCompile Include="KernelDriverExecutionEngine.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Emulator.h" />
     <ClInclude Include="EmulatorHooks.h" />
     <ClInclude Include="Executable.h" />
     <ClInclude Include="KernelDriverExecutionEngine.h" />

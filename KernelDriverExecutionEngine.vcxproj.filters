@@ -24,6 +24,9 @@
     <ClCompile Include="EmulatorHooks.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Emulator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Executable.h">
@@ -33,6 +36,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="KernelDriverExecutionEngine.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Emulator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

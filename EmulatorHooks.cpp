@@ -1,23 +1,15 @@
 #include <iostream>
 #include <iomanip>
 #include <sstream>
-#include <vector>
 
 #include "EmulatorHooks.h"
+#include "Emulator.h"
 #include "Executable.h"
 
-extern uint64_t stack_top;
-extern uint64_t stack_bottom;
-extern uint64_t sysRange_bottom;
-extern uint64_t sysRange_top;
-extern uint64_t param_1_driverObject;
-extern uint64_t param_2_registryPath;
+class Emulator;
 
-extern std::vector<uint64_t> emulator_breakpoints;
-
-bool step = false;
-
-Executable* exec;
+extern Executable* exec;
+extern Emulator* em;
 
 std::string hexStr(const uint8_t* data, int len)
 {
@@ -45,8 +37,9 @@ static bool IsRing0Instruction(ZydisDisassembledInstruction* instruction)
 
 }
 
-void print_emulator_cpu_state(uc_engine* uc)
+void print_emulator_cpu_state()
 {
+	uc_engine* uc = em->uc;
 	uint64_t r_rax;
 	uint64_t r_rbx;
 	uint64_t r_rcx;
@@ -175,44 +168,36 @@ void print_current_emulator_stack(uc_engine* uc, int count)
 
 bool isAddressBreakpoint(uint64_t address)
 {
-	for (uint64_t breakpoint : emulator_breakpoints)
+	for (uint64_t breakpoint : em->emulator_breakpoints)
 		if (address == breakpoint)
 			return true;
 	
 	return false;
 }
 
-void AddBreakpoint(uint64_t address)
+void print_memory(uint64_t address, size_t size)
 {
-	emulator_breakpoints.push_back(address);
-}
-
-void RemoveBreakpoint(int index)
-{
-	return;
-}
-
-void print_memory(uc_engine* uc, uint64_t address, size_t size)
-{
+	uc_engine* uc = em->uc;
 	uint8_t *val = (uint8_t*) malloc(size);
 	if(uc_mem_read(uc, address, val, size) == UC_ERR_OK)
 		std::cout << (LPVOID)address << ": " << hexStr(val, size) << std::endl;
 }
 
-void HandleUserInput(uc_engine *uc)
+void HandleUserInput()
 {
+	uc_engine* uc = em->uc;
 	while (1)
 	{
 		std::string input;
 		std::cin >> input;
 		if (input == "c")
 		{
-			step = false;
+			em->step = false;
 			return;
 		}
 		else if (input == "s")
 		{
-			step = true;
+			em->step = true;
 			return;
 		}
 		else if (input == "irsp")
@@ -227,7 +212,7 @@ void HandleUserInput(uc_engine *uc)
 			std::cin >> address_string;
 			uint64_t address = std::stoull(address_string, nullptr, 16);
 
-			AddBreakpoint(address);
+			em->AddBreakpoint(address);
 			std::cout << "Added Breakpoint: " << (LPVOID)address << std::endl;
 		}
 		else if (input.substr(0, 2) == "rb")
@@ -240,9 +225,9 @@ void HandleUserInput(uc_engine *uc)
 
 			std::cout << "Removing Breakpoint: " << (LPVOID)index << std::endl;
 
-			std::vector<uint64_t>::iterator it = emulator_breakpoints.begin();
+			std::vector<uint64_t>::iterator it = em->emulator_breakpoints.begin();
 			std::advance(it, index);
-			emulator_breakpoints.erase(it);
+			em->emulator_breakpoints.erase(it);
 		}
 		else if (input == "stack")
 		{
@@ -265,7 +250,7 @@ void HandleUserInput(uc_engine *uc)
 
 			for (int i = 0; i < count; i++)
 			{
-				print_memory(uc, r_rsp + i * size, size);
+				print_memory(r_rsp + i * size, size);
 			}
 		}
 	}
@@ -274,16 +259,16 @@ void HandleUserInput(uc_engine *uc)
 
 void hook_instruction(uc_engine* uc, uint64_t address, uint32_t size, void* user_data)
 {
-	if (isAddressBreakpoint(address) || step)
+	if (isAddressBreakpoint(address) || em->step)
 	{
-		LPVOID real_address = (LPVOID)((BYTE*)exec->imgBase + (address - exec->optionalHeader->ImageBase));
+		LPVOID real_address = (LPVOID)((BYTE*)exec->imgBase + (address - exec->EmulationImageBase));
 		ZydisDisassembledInstruction instruction;
 		if (ZYAN_SUCCESS(ZydisDisassembleIntel(ZYDIS_MACHINE_MODE_LONG_64, address, real_address, 16, &instruction)))
 		{
 			print_insn(&instruction);
-			print_emulator_cpu_state(uc);
+			print_emulator_cpu_state();
 
-			HandleUserInput(uc);
+			HandleUserInput();
 		}
 	}
 }
@@ -299,6 +284,23 @@ void hook_ring0_instruction(uc_engine* uc, uint64_t address, uint32_t size, void
 	}
 }
 
+void hook_register(uc_engine* uc, uint64_t address, uint32_t size, void* user_data)
+{
+	LPVOID real_address = (LPVOID)((BYTE*)exec->imgBase + (address - exec->EmulationImageBase));
+	ZydisDisassembledInstruction instruction;
+	if (ZYAN_SUCCESS(ZydisDisassembleIntel(ZYDIS_MACHINE_MODE_LONG_64, address, real_address, 16, &instruction)))
+	{
+		std::string text = instruction.text;
+		if (text.find("xmm5") != std::string::npos)
+		{
+			print_insn(&instruction);
+			print_emulator_cpu_state();
+
+			HandleUserInput();
+		}
+	}
+}
+
 void hook_jump_instruction(uc_engine* uc, uint64_t address, uint32_t size, void* user_data)
 {
 	LPVOID real_address = (LPVOID)((BYTE*)exec->imgBase + (address - exec->EmulationImageBase));
@@ -306,21 +308,21 @@ void hook_jump_instruction(uc_engine* uc, uint64_t address, uint32_t size, void*
 	if (ZYAN_SUCCESS(ZydisDisassembleIntel(ZYDIS_MACHINE_MODE_LONG_64, address, real_address, 16, &instruction)))
 	{
 		ZydisMnemonic mnem = instruction.info.mnemonic;
-		//if (mnem >= ZYDIS_MNEMONIC_JB && mnem <= ZYDIS_MNEMONIC_JZ)
-		//{
-			//print_insn(&instruction);
-			//print_emulator_cpu_state(uc);
-		//}
+		if (mnem >= ZYDIS_MNEMONIC_JB && mnem <= ZYDIS_MNEMONIC_JZ)
+		{
+			print_insn(&instruction);
+			print_emulator_cpu_state();
+		}
 		if (mnem == ZYDIS_MNEMONIC_CALL)
 		{
 			print_insn(&instruction);
-			print_emulator_cpu_state(uc);
+			print_emulator_cpu_state();
 		}
-		//else if (mnem == ZYDIS_MNEMONIC_RET)
-		//{
-			//print_insn(&instruction);
-			//print_emulator_cpu_state(uc);
-		//}
+		else if (mnem == ZYDIS_MNEMONIC_RET)
+		{
+			print_insn(&instruction);
+			print_emulator_cpu_state();
+		}
 	}
 }
 
@@ -331,19 +333,6 @@ void hook_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int size, in
 	uc_reg_read(uc, UC_X86_REG_RIP, &r_rip);
 	std::string location;
 	//Get Location of Address
-	if (address >= stack_bottom && address <= stack_top)
-	{
-		location = "Stack Address: ";
-	}
-	else if (address >= exec->EmulationImageBase && address <= exec->EmulationImageBase + exec->imgSize)
-	{
-		location = "Image Address: ";
-	}
-	else if (address >= sysRange_bottom && address <= sysRange_top)
-	{
-		location = "System Address: ";
-	}
-		
 
 	switch (type)
 	{
@@ -362,10 +351,10 @@ void hook_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int size, in
 
 void hook_custom_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int size, int64_t value, void* user_data)
 {
-	if (address >= param_1_driverObject && address <= param_2_registryPath + 0x8)
+	/*if (address >= param_1_driverObject && address <= param_2_registryPath + 0x8)
 	{
 
-	}
+	}*/
 }
 
 void hook_parameter_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int size, int64_t value, void* user_data)
@@ -375,7 +364,7 @@ void hook_parameter_memory(uc_engine* uc, uc_mem_type type, uint64_t address, in
 	uc_reg_read(uc, UC_X86_REG_RIP, &r_rip);
 	std::string location;
 	//Get Location of Address
-	if (address >= param_1_driverObject && address <= param_2_registryPath + 0x8)
+	/*if (address >= param_1_driverObject && address <= param_2_registryPath + 0x8)
 	{
 		switch (type)
 		{
@@ -391,7 +380,7 @@ void hook_parameter_memory(uc_engine* uc, uc_mem_type type, uint64_t address, in
 			std::cout << (LPVOID)r_rip << ":\tValue: " << (LPVOID)value << ":\tFetched from " << (LPVOID)address << "\tSize: " << (LPVOID)size << std::endl;
 			break;
 		}
-	}
+	}*/
 }
 
 void hook_invalid_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int size, int64_t value, void* user_data)
@@ -399,10 +388,4 @@ void hook_invalid_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int 
 	uint64_t r_rip;
 	uc_reg_read(uc, UC_X86_REG_RIP, &r_rip);
 	std::cout << (LPVOID) r_rip << ":\tAccess Violation at Address: " << (LPVOID)address << "\tSize: " << (LPVOID)size << std::endl;
-}
-
-bool InitDisassembler(Executable *created_exec)
-{
-	exec = created_exec;
-	return true;
 }
