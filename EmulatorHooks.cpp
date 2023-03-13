@@ -5,11 +5,14 @@
 #include "EmulatorHooks.h"
 #include "Emulator.h"
 #include "Executable.h"
+#include "Zydis/Zydis.h"
 
 class Emulator;
 
 extern Executable* exec;
 extern Emulator* em;
+
+size_t skip_first = 10000;
 
 std::string hexStr(const uint8_t* data, int len)
 {
@@ -301,6 +304,11 @@ void hook_register(uc_engine* uc, uint64_t address, uint32_t size, void* user_da
 	}
 }
 
+void hook_IAT_exec(uc_engine* uc, uint64_t address, uint32_t size, void* user_data)
+{
+	std::cout << "IAT HOOK AT ADDRESS: " << (LPVOID)address << std::endl;
+}
+
 void hook_jump_instruction(uc_engine* uc, uint64_t address, uint32_t size, void* user_data)
 {
 	LPVOID real_address = (LPVOID)((BYTE*)exec->imgBase + (address - exec->EmulationImageBase));
@@ -310,6 +318,12 @@ void hook_jump_instruction(uc_engine* uc, uint64_t address, uint32_t size, void*
 		ZydisMnemonic mnem = instruction.info.mnemonic;
 		if (mnem >= ZYDIS_MNEMONIC_JB && mnem <= ZYDIS_MNEMONIC_JZ)
 		{
+			if (skip_first > 0)
+			{
+				skip_first--;
+				return;
+			}
+
 			print_insn(&instruction);
 			print_emulator_cpu_state();
 		}
@@ -317,11 +331,12 @@ void hook_jump_instruction(uc_engine* uc, uint64_t address, uint32_t size, void*
 		{
 			print_insn(&instruction);
 			print_emulator_cpu_state();
+			//HandleUserInput();
 		}
 		else if (mnem == ZYDIS_MNEMONIC_RET)
 		{
-			print_insn(&instruction);
-			print_emulator_cpu_state();
+			//print_insn(&instruction);
+			//print_emulator_cpu_state();
 		}
 	}
 }

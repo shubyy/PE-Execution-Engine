@@ -1,6 +1,5 @@
 #pragma once
 #include <Windows.h>
-
 #include <string>
 
 class Executable
@@ -25,13 +24,13 @@ public:
 
 	bool bInitialised;
 
-	LPVOID MapFileIntoMemory(const std::string& exePath);
-
 	bool CheckMagicHeader();
 
 	void AllocAndLoadSections(LPVOID fileBase);
 
 	void ApplyRelocations();
+
+	void HookImports(uint64_t newBase);
 
 	bool LoadExecutable(const std::string& exePath);
 
@@ -39,3 +38,4 @@ public:
 
 };
 
+LPVOID MapFileIntoMemory(const std::string& exePath, size_t* fileSize = NULL);

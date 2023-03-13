@@ -1,25 +1,25 @@
 #include "Executable.h"
 #include <filesystem>
 #include <iostream>
-
 #include <fstream>
 
 #define RELOCFLAG32(RelInfo) ((RelInfo >> 0x0C) == IMAGE_REL_BASED_HIGHLOW)
 #define RELOCFLAG64(RelInfo) ((RelInfo >> 0x0C) == IMAGE_REL_BASED_DIR64)
 
-LPVOID Executable::MapFileIntoMemory(const std::string& exePath)
+LPVOID MapFileIntoMemory(const std::string& exePath, size_t *fileSize)
 {
     std::ifstream exeFile(exePath, std::ios::binary | std::ios::in);
     if (!exeFile)
         return NULL;
 
-    fileSize = std::filesystem::file_size(exePath);
-    if (fileSize < 0x100)
-        return NULL;
+    size_t fSize = std::filesystem::file_size(exePath);
 
-    void* exeData = malloc(fileSize);
+    void* exeData = malloc(fSize);
+    exeFile.read((char*)exeData, fSize);
 
-    exeFile.read((char*)exeData, fileSize);
+    if(fileSize)
+        *fileSize = fSize;
+
     return exeData;
 }
 
@@ -29,6 +29,31 @@ bool Executable::CheckMagicHeader()
         return true;
 
     return false;
+}
+
+void Executable::HookImports(uint64_t base)
+{
+    if (optionalHeader->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size)
+    {
+        PIMAGE_IMPORT_DESCRIPTOR importDesc = (PIMAGE_IMPORT_DESCRIPTOR) ((BYTE*) imgBase + optionalHeader->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
+        while (importDesc->Name)
+        {
+            ULONG_PTR* OFT = (ULONG_PTR*)   ((BYTE*)imgBase + importDesc->OriginalFirstThunk);
+            ULONG_PTR*  FT = (ULONG_PTR*)   ((BYTE*)imgBase + importDesc->FirstThunk);
+
+            if (!OFT)
+                OFT = FT;
+
+            ULONG_PTR* StartOFT = OFT;
+            for (; *OFT; ++OFT, ++FT)
+            {
+                std::cout << "Relocated " << (LPVOID) *FT << " at " << (LPVOID) (base + ((uint64_t)OFT - (uint64_t)importDesc)) << std::endl;
+                *FT = base + ((uint64_t)OFT - (uint64_t)importDesc);
+            }
+
+            ++importDesc;
+        }
+    }
 }
 
 void Executable::AllocAndLoadSections(LPVOID fileBase)
@@ -55,9 +80,7 @@ void Executable::AllocAndLoadSections(LPVOID fileBase)
     }
        
     //Apply relocations
-    
-        ApplyRelocations();
-            
+    ApplyRelocations();
 }
 
 void Executable::ApplyRelocations()
@@ -89,7 +112,7 @@ void Executable::ApplyRelocations()
 
 bool Executable::LoadExecutable(const std::string& exePath)
 {
-    LPVOID fileBase = MapFileIntoMemory(exePath);
+    LPVOID fileBase = MapFileIntoMemory(exePath, &fileSize);
     if (!fileBase)
         return false;
 
