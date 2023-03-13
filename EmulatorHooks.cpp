@@ -37,7 +37,7 @@ void print_insn(ZydisDisassembledInstruction *instruction)
 
 static bool IsRing0Instruction(ZydisDisassembledInstruction* instruction)
 {
-
+	return false;
 }
 
 void print_emulator_cpu_state()
@@ -306,7 +306,37 @@ void hook_register(uc_engine* uc, uint64_t address, uint32_t size, void* user_da
 
 void hook_IAT_exec(uc_engine* uc, uint64_t address, uint32_t size, void* user_data)
 {
-	std::cout << "IAT HOOK AT ADDRESS: " << (LPVOID)address << std::endl;
+	//Calculate hook function from address
+	uint64_t funcHookOffset = address - exec->IATHookBase;
+
+	PIMAGE_OPTIONAL_HEADER optionalHeader = exec->optionalHeader;
+	if (optionalHeader->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size)
+	{
+		PIMAGE_IMPORT_DESCRIPTOR importDesc = (PIMAGE_IMPORT_DESCRIPTOR)((BYTE*)exec->imgBase + optionalHeader->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
+		uint64_t startImportDesc = (uint64_t)importDesc;
+		while (importDesc->Name)
+		{
+			ULONG_PTR* OFT = (ULONG_PTR*)((BYTE*)exec->imgBase + importDesc->OriginalFirstThunk);
+			ULONG_PTR* FT = (ULONG_PTR*)((BYTE*)exec->imgBase + importDesc->FirstThunk);
+
+			if (!OFT)
+				OFT = FT;
+
+			for (; *OFT; ++OFT, ++FT)
+			{
+				uint64_t funcIATOffset = (uint64_t)OFT - (uint64_t)startImportDesc;
+				if (funcIATOffset == funcHookOffset)
+				{
+					//Function Match
+					PIMAGE_IMPORT_BY_NAME IATImport = (PIMAGE_IMPORT_BY_NAME) ((BYTE*)exec->imgBase + *OFT);
+					std::cout << "Found Function Match: " << IATImport->Name << std::endl;
+					return;
+				}
+			}
+
+			++importDesc;
+		}
+	}
 }
 
 void hook_jump_instruction(uc_engine* uc, uint64_t address, uint32_t size, void* user_data)

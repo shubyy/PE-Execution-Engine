@@ -21,6 +21,7 @@ public:
 
 	uint64_t EmulationStart;
 	uint64_t EmulationEnd;
+	uint64_t IATHookBase;
 
 	bool bInitialised;
 

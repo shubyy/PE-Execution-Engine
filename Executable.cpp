@@ -13,6 +13,8 @@ LPVOID MapFileIntoMemory(const std::string& exePath, size_t *fileSize)
         return NULL;
 
     size_t fSize = std::filesystem::file_size(exePath);
+    if (fSize == 0)
+        return NULL;
 
     void* exeData = malloc(fSize);
     exeFile.read((char*)exeData, fSize);
@@ -36,6 +38,7 @@ void Executable::HookImports(uint64_t base)
     if (optionalHeader->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size)
     {
         PIMAGE_IMPORT_DESCRIPTOR importDesc = (PIMAGE_IMPORT_DESCRIPTOR) ((BYTE*) imgBase + optionalHeader->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
+        uint64_t startImportDesc = (uint64_t) importDesc;
         while (importDesc->Name)
         {
             ULONG_PTR* OFT = (ULONG_PTR*)   ((BYTE*)imgBase + importDesc->OriginalFirstThunk);
@@ -44,15 +47,15 @@ void Executable::HookImports(uint64_t base)
             if (!OFT)
                 OFT = FT;
 
-            ULONG_PTR* StartOFT = OFT;
             for (; *OFT; ++OFT, ++FT)
             {
-                std::cout << "Relocated " << (LPVOID) *FT << " at " << (LPVOID) (base + ((uint64_t)OFT - (uint64_t)importDesc)) << std::endl;
-                *FT = base + ((uint64_t)OFT - (uint64_t)importDesc);
+                std::cout << "Relocated " << (LPVOID) *FT << " at " << (LPVOID) (base + ((uint64_t)OFT - (uint64_t)startImportDesc)) << std::endl;
+                *FT = base + ((uint64_t)OFT - (uint64_t)startImportDesc);
             }
 
             ++importDesc;
         }
+        IATHookBase = base;
     }
 }
 
@@ -141,6 +144,7 @@ Executable::Executable(const std::string& path, uint64_t ImageBase)
     fileBase = NULL;
     fileSize = 0;
     imgSize = 0;
+    IATHookBase = 0;
     EmulationImageBase = ImageBase;
     bInitialised = false;
 

@@ -97,9 +97,9 @@ bool SetupEmulator()
 
 int main(int argc, char* argv[])
 {
-    exec = new Executable("", LOAD_ADDRESS);
-    if(exec->bInitialised)
-        std::cout << "Loaded executable!" << std::endl;
+    exec = new Executable("C:\\Users\\Shubham\\Desktop\\x96dbg.exe", LOAD_ADDRESS);
+    if(!exec->bInitialised)
+        std::cout << "Failed to load executable!" << std::endl; return -1;
 
     SetupEmulator();
     uc_err err;
@@ -118,7 +118,7 @@ int main(int argc, char* argv[])
 
     //Start Emulation
     AddInitialBreakpoints();
-    bool success = em->StartEmulation(exec->EmulationStart, exec->EmulationEnd, 0, 0);
+    bool success = false;//em->StartEmulation(exec->EmulationStart, exec->EmulationEnd, 0, 0);
     if (!success)
         std::cout << "\nFailed to emulate executable\n\nState: \n" << std::endl;
     else
