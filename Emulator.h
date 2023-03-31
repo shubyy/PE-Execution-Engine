@@ -6,6 +6,15 @@
 
 typedef ULONGLONG (*ImportCallback)(uc_engine *uc);
 
+enum EExecType
+{
+    ExecType_Unknown,
+	ExecType_PE32,
+	ExecType_PE64,
+    ExecType_ELF,
+    ExecType_PE64_KERNEL
+};;
+
 class EmulatorMap
 {
 public:

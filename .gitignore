@@ -348,3 +348,12 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
+/include
+/libs
+/capstone.dll
+/output.txt
+/output_func.txt
+/unicorn.dll
+/Zydis.dll
+/.gitignore
+/.gitignore

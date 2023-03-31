@@ -42,7 +42,7 @@ PDRIVER_OBJECT CreateFakeDriverObject()
     return driverObject;
 }
 
-bool SetupEmulator()
+bool SetupEmulator(EExecType type = EExecType::ExecType_PE64)
 {
     em = new Emulator();
     if (!em->init)
@@ -52,6 +52,7 @@ bool SetupEmulator()
     }
 
     SetEmulatorSettings();
+
     //Setup IAT Hooks by filling func address with custom address
     uc_hook IAThook;
     uint64_t IATHookBase = 0x80000;
@@ -83,43 +84,23 @@ bool SetupEmulator()
     em->WriteReg(UC_X86_REG_RSP, &r_rsp);
     em->WriteReg(UC_X86_REG_RBP, &r_rbp);
 
-    //Create fake driver object and reg path
-    PDRIVER_OBJECT driverObject = CreateFakeDriverObject();
-    const std::wstring reg_path = L"";
-
-    uint64_t param_1_driverObject = exec->EmulationImageBase - 0xFF80000000;
-    uint64_t param_2_registryPath = param_1_driverObject + 0x200;
-
-    em->AddMappingFromSource(param_1_driverObject, roundUp(sizeof(DRIVER_OBJECT), 4096), driverObject, sizeof(DRIVER_OBJECT), UC_PROT_READ | UC_PROT_WRITE, "Parameters");
-
-    em->WriteReg(UC_X86_REG_RAX, &exec->EmulationStart);
-    em->WriteReg(UC_X86_REG_RCX, &param_1_driverObject);
-    em->WriteReg(UC_X86_REG_RDI, &param_1_driverObject);
-    em->WriteReg(UC_X86_REG_R15, &param_1_driverObject);
-    em->WriteReg(UC_X86_REG_RDX, &param_2_registryPath);
-
-    //Fake constant memory location in kernel
-    size_t k_data_size = 0;
-    uint64_t kernel_data_base = 0xfffff78000000000;
-    LPVOID k_data = MapFileIntoMemory("./kernel_data.data", &k_data_size);
-    em->AddMapping(kernel_data_base, roundUp(k_data_size, 4096), UC_PROT_ALL, "Kernel Data");
-    em->WriteEmuMem(0xfffff78000000014, k_data, k_data_size);
+    if (type == ExecType_PE64_KERNEL)
+        AllocKernelSpecificRegions();
 
     em->AddBreakpoint( exec->EmulationStart );
 
-    delete driverObject;
     return true;
 }
 
 int main(int argc, char* argv[])
 {
-    exec = new Executable("D:\\RE\\EAC\\EasyAntiCheat.sys", LOAD_ADDRESS);
+    exec = new Executable(argv[1], LOAD_ADDRESS);
     if (!exec->bInitialised)
     {
         std::cout << "Failed to load executable" << std::endl;
         return -1;
     }
-    SetupEmulator();
+    SetupEmulator(ExecType_PE64_KERNEL);
 
     uc_hook trace1, trace2, trace3;
 
@@ -159,4 +140,30 @@ int main(int argc, char* argv[])
 
     return 0;
 
+}
+
+void AllocKernelSpecificRegions()
+{
+    //Create fake driver object and reg path
+    PDRIVER_OBJECT driverObject = CreateFakeDriverObject();
+    const std::wstring reg_path = L"";
+
+    uint64_t param_1_driverObject = exec->EmulationImageBase - 0xFF80000000;
+    uint64_t param_2_registryPath = param_1_driverObject + 0x200;
+
+    em->AddMappingFromSource(param_1_driverObject, roundUp(sizeof(DRIVER_OBJECT), 4096), driverObject, sizeof(DRIVER_OBJECT), UC_PROT_READ | UC_PROT_WRITE, "Parameters");
+
+    em->WriteReg(UC_X86_REG_RAX, &exec->EmulationStart);
+    em->WriteReg(UC_X86_REG_RCX, &param_1_driverObject);
+    em->WriteReg(UC_X86_REG_RDI, &param_1_driverObject);
+    em->WriteReg(UC_X86_REG_R15, &param_1_driverObject);
+    em->WriteReg(UC_X86_REG_RDX, &param_2_registryPath);
+    delete driverObject;
+
+    //Fake constant memory location in kernel
+    size_t k_data_size = 0;
+    uint64_t kernel_data_base = 0xfffff78000000000;
+    LPVOID k_data = MapFileIntoMemory("./kernel_data.data", &k_data_size);
+    em->AddMapping(kernel_data_base, roundUp(k_data_size, 4096), UC_PROT_ALL, "Kernel Data");
+    em->WriteEmuMem(0xfffff78000000014, k_data, k_data_size);
 }

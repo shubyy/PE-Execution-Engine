@@ -38,3 +38,6 @@ typedef struct _DRIVER_OBJECT
     LPVOID DriverUnload;
     LPVOID MajorFunction[28];
 } DRIVER_OBJECT, *PDRIVER_OBJECT;
+
+
+void AllocKernelSpecificRegions();
