@@ -53,6 +53,20 @@ void Emulator::RegisterCallback(std::string name, ImportCallback callback)
 	callbacks.emplace(name, callback);
 }
 
+void Emulator::GetAddressMapName(uint64_t address, std::string& name)
+{
+	for(auto map : emulator_maps)
+	{
+		if (address >= map->m_map_start && address < (map->m_map_start + map->m_map_size))
+		{
+			name = map->map_name;
+			return;
+		}
+	}
+
+	name = "Unknown";
+}
+
 ImportCallback Emulator::GetCallback(std::string name)
 {
 	std::unordered_map<std::string, ImportCallback>::iterator itr = callbacks.find(name);

@@ -59,6 +59,12 @@ void Executable::HookImports(uint64_t base)
     }
 }
 
+void Executable::LoadHeader(LPVOID fileBase)
+{
+    uint32_t sizeOfheaders = optionalHeader->SizeOfHeaders;
+    std::memcpy(imgBase, fileBase, sizeOfheaders);
+}
+
 void Executable::AllocAndLoadSections(LPVOID fileBase)
 {
     imgSize = optionalHeader->SizeOfImage;
@@ -69,6 +75,8 @@ void Executable::AllocAndLoadSections(LPVOID fileBase)
 
     if (!imgBase)
         return;
+
+    LoadHeader(fileBase);
     
     IMAGE_SECTION_HEADER* sectionHeader = IMAGE_FIRST_SECTION(ntHeader);
     for (int i = 0; i != fileHeader->NumberOfSections; i++, sectionHeader++)
@@ -141,7 +149,6 @@ bool Executable::LoadExecutable(const std::string& exePath)
 Executable::Executable(const std::string& path, uint64_t ImageBase)
 {
     imgBase = NULL;
-    fileBase = NULL;
     fileSize = 0;
     imgSize = 0;
     IATHookBase = 0;

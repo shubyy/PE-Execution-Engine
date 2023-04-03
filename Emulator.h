@@ -60,6 +60,8 @@ public:
 
     void RegisterCallback(std::string name, ImportCallback callback);
 
+    void GetAddressMapName(uint64_t address, std::string& name);
+
     void PushCall(uint64_t call_address);
     void PopCall();
 

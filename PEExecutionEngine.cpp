@@ -1,16 +1,11 @@
 #include <iostream>
-#include <string>
-#include <format>
-#include <vector>
-#include <iomanip> 
 #include "PEExecutionEngine.h"
 #include "Emulator.h"
 #include "unicorn/unicorn.h"
 #include "Executable.h"
 #include "EmulatorHooks.h"
 
-#define LOAD_ADDRESS 0x140000000 //0xfffff807173b0000 
-
+#define LOAD_ADDRESS 0x140000000 //0xfffff807173b0000
 uint64_t END_ADDRESS = ULLONG_MAX;
 
 Executable* exec;
@@ -18,10 +13,8 @@ Emulator* em;
 
 void AddInitialBreakpoints()
 {
-    //em->AddBreakpoint(0x140697ced);
-    //em->AddBreakpoint(0x140bdbe19);
-    em->AddBreakpoint(0x140c0f47a);
-    em->AddBreakpoint(0x0);
+    //em->AddBreakpoint(0x14000c77c);
+    em->AddBreakpoint(0x1402193a9);
 }
 
 void SetEmulatorSettings()
@@ -73,7 +66,7 @@ bool SetupEmulator(EExecType type = EExecType::ExecType_PE64)
 
     //Choose Heap and Stack
     uint64_t stack_bottom = roundUp(exec->EmulationImageBase + uc_mem_size - 0xFFFF000000, 0x1000);
-    uint64_t initial_stack_Size = 32 * 1024;
+    uint64_t initial_stack_Size = 8 * 4096;
     uint64_t stack_top = stack_bottom + initial_stack_Size;
     em->AddMapping(stack_bottom, initial_stack_Size, UC_PROT_READ | UC_PROT_WRITE, "Stack");
 
@@ -111,7 +104,7 @@ int main(int argc, char* argv[])
     std::cout << std::hex << "\nImage Mapping: 0x" << exec->EmulationImageBase << "-0x" << exec->EmulationImageBase + exec->imgSize << std::endl << std::endl;
     
     uc_hook_add(em->uc, &trace1, UC_HOOK_CODE, hook_instruction, NULL, exec->EmulationImageBase, exec->EmulationImageBase + exec->imgSize);
-    //uc_hook_add(uc, &trace2, UC_HOOK_MEM_VALID, hook_memory, NULL, 0, LLONG_MAX);
+    //uc_hook_add(em->uc, &trace2, UC_HOOK_MEM_VALID, hook_memory, NULL, 0, LLONG_MAX);
     //uc_hook_add(uc, &trace3, UC_HOOK_MEM_INVALID, hook_invalid_memory, NULL, 0, LLONG_MAX);
 
     //Start Emulation
@@ -166,4 +159,45 @@ void AllocKernelSpecificRegions()
     LPVOID k_data = MapFileIntoMemory("./kernel_data.data", &k_data_size);
     em->AddMapping(kernel_data_base, roundUp(k_data_size, 4096), UC_PROT_ALL, "Kernel Data");
     em->WriteEmuMem(0xfffff78000000014, k_data, k_data_size);
+
+    InitialiseXMMRegs();
+
+    delete k_data;
+}
+
+void InitialiseXMMRegs()
+{
+    unsigned char xmm[16]{};
+    
+    em->WriteReg(UC_X86_REG_XMM0, xmm);
+    *(uint64_t*)xmm = 0x1111111111111111;
+    em->WriteReg(UC_X86_REG_XMM1, xmm);
+    *(uint64_t*)xmm = 0x2222222222222222;
+    em->WriteReg(UC_X86_REG_XMM2, xmm);
+    *(uint64_t*)xmm = 0x3333333333333333;
+    em->WriteReg(UC_X86_REG_XMM3, xmm);
+    *(uint64_t*)xmm = 0x4444444444444444;
+    em->WriteReg(UC_X86_REG_XMM4, xmm);
+    *(uint64_t*)xmm = 0x5555555555555555;
+    em->WriteReg(UC_X86_REG_XMM5, xmm);
+    *(uint64_t*)xmm = 0x6666666666666666;
+    em->WriteReg(UC_X86_REG_XMM6, xmm);
+    *(uint64_t*)xmm = 0x7777777777777777;
+    em->WriteReg(UC_X86_REG_XMM7, xmm);
+    *(uint64_t*)xmm = 0x8888888888888888;
+    em->WriteReg(UC_X86_REG_XMM8, xmm);
+    *(uint64_t*)xmm = 0x9999999999999999;
+    em->WriteReg(UC_X86_REG_XMM9, xmm);
+    *(uint64_t*)xmm = 0xAAAAAAAAAAAAAAAA;
+    em->WriteReg(UC_X86_REG_XMM10, xmm);
+    *(uint64_t*)xmm = 0xBBBBBBBBBBBBBBBB;
+    em->WriteReg(UC_X86_REG_XMM11, xmm);
+    *(uint64_t*)xmm = 0xCCCCCCCCCCCCCCCC;
+    em->WriteReg(UC_X86_REG_XMM12, xmm);
+    *(uint64_t*)xmm = 0xDDDDDDDDDDDDDDDD;
+    em->WriteReg(UC_X86_REG_XMM13, xmm);
+    *(uint64_t*)xmm = 0xEEEEEEEEEEEEEEEE;
+    em->WriteReg(UC_X86_REG_XMM14, xmm);
+    *(uint64_t*)xmm = 0xFFFFFFFFFFFFFFFF;
+    em->WriteReg(UC_X86_REG_XMM15, xmm);
 }

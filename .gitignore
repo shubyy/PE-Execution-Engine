@@ -357,3 +357,6 @@ MigrationBackup/
 /Zydis.dll
 /.gitignore
 /.gitignore
+/output_calls.txt
+/output_image_access.txt
+/output_loop.txt

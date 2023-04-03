@@ -7,7 +7,6 @@ LPVOID MapFileIntoMemory(const std::string& exePath, size_t* fileSize = NULL);
 class Executable
 {
 public:
-	LPVOID fileBase;
 	LPVOID imgBase;
 
 	uint64_t EmulationImageBase;
@@ -34,6 +33,8 @@ public:
 	void ApplyRelocations();
 
 	void HookImports(uint64_t newBase);
+
+	void LoadHeader(LPVOID fileBase);
 
 	bool LoadExecutable(const std::string& exePath);
 

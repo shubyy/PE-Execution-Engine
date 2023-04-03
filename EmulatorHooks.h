@@ -17,3 +17,4 @@ void hook_IAT_exec(uc_engine* uc, uint64_t address, uint32_t size, void* user_da
 
 //Display
 void print_emulator_cpu_state();
+void print_insn_at(uint64_t);

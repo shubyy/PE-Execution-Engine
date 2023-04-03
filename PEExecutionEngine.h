@@ -41,3 +41,4 @@ typedef struct _DRIVER_OBJECT
 
 
 void AllocKernelSpecificRegions();
+void InitialiseXMMRegs();
