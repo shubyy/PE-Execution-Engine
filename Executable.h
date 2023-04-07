@@ -4,6 +4,15 @@
 
 LPVOID MapFileIntoMemory(const std::string& exePath, size_t* fileSize = NULL);
 
+enum EExecType
+{
+	ExecType_Unknown,
+	ExecType_PE32,
+	ExecType_PE64,
+	ExecType_ELF,
+	ExecType_PE64_KERNEL
+};
+
 class Executable
 {
 public:
@@ -14,11 +23,7 @@ public:
 	size_t fileSize;
 	size_t imgSize;
 
-	//Image headers
-	PIMAGE_DOS_HEADER dosHeader;
-	PIMAGE_NT_HEADERS ntHeader;
-	PIMAGE_FILE_HEADER fileHeader;
-	PIMAGE_OPTIONAL_HEADER optionalHeader;
+	
 
 	uint64_t EmulationStart;
 	uint64_t EmulationEnd;
@@ -41,4 +46,3 @@ public:
 	Executable(const std::string& path, uint64_t ImageBase = 0x0);
 
 };
-

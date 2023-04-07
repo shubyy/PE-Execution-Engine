@@ -145,6 +145,7 @@
     <ClCompile Include="EmulatorHooks.cpp" />
     <ClCompile Include="EmulatorImportCallbacks.cpp" />
     <ClCompile Include="Executable.cpp" />
+    <ClCompile Include="ExecutablePE.cpp" />
     <ClCompile Include="PEExecutionEngine.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -152,6 +153,7 @@
     <ClInclude Include="EmulatorHooks.h" />
     <ClInclude Include="EmulatorImportCallback.h" />
     <ClInclude Include="Executable.h" />
+    <ClInclude Include="ExecutablePE.h" />
     <ClInclude Include="PEExecutionEngine.h" />
   </ItemGroup>
   <ItemGroup>

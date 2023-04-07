@@ -5,7 +5,7 @@
 #include "Executable.h"
 #include "EmulatorHooks.h"
 
-#define LOAD_ADDRESS 0x140000000 //0xfffff807173b0000
+#define LOAD_ADDRESS 0x140000000// 0xfffff8006a300000 
 uint64_t END_ADDRESS = ULLONG_MAX;
 
 Executable* exec;
@@ -13,13 +13,16 @@ Emulator* em;
 
 void AddInitialBreakpoints()
 {
-    //em->AddBreakpoint(0x14000c77c);
-    em->AddBreakpoint(0x1402193a9);
+    em->AddBreakpoint(0x14052e931);
+    //em->AddBreakpoint(0x1402193a9);
+    //em->AddBreakpoint(0x1402193D6);
+    //em->AddBreakpoint(0x14066866a);
+    //em->AddBreakpoint(0x1406a0dd2);
 }
 
 void SetEmulatorSettings()
 {
-    em->breakOnImport = false;
+    em->breakOnImport = true;
 }
 
 PDRIVER_OBJECT CreateFakeDriverObject()
@@ -32,6 +35,7 @@ PDRIVER_OBJECT CreateFakeDriverObject()
     driverObject->DriverStart = (LPVOID)exec->EmulationImageBase;
     driverObject->DriverSize = exec->imgSize;
     driverObject->DriverInit = (LPVOID)exec->EmulationStart;
+
     return driverObject;
 }
 
@@ -95,7 +99,7 @@ int main(int argc, char* argv[])
     }
     SetupEmulator(ExecType_PE64_KERNEL);
 
-    uc_hook trace1, trace2, trace3;
+    uc_hook trace1, trace2, jump_count_trace;
 
     exec->EmulationEnd = END_ADDRESS;
 
@@ -103,9 +107,12 @@ int main(int argc, char* argv[])
     std::cout << "Emulation End Address: " << (LPVOID) exec->EmulationEnd << std::endl;
     std::cout << std::hex << "\nImage Mapping: 0x" << exec->EmulationImageBase << "-0x" << exec->EmulationImageBase + exec->imgSize << std::endl << std::endl;
     
+    
     uc_hook_add(em->uc, &trace1, UC_HOOK_CODE, hook_instruction, NULL, exec->EmulationImageBase, exec->EmulationImageBase + exec->imgSize);
-    //uc_hook_add(em->uc, &trace2, UC_HOOK_MEM_VALID, hook_memory, NULL, 0, LLONG_MAX);
-    //uc_hook_add(uc, &trace3, UC_HOOK_MEM_INVALID, hook_invalid_memory, NULL, 0, LLONG_MAX);
+    uc_hook_add(em->uc, &jump_count_trace, UC_HOOK_CODE, hook_jump_count, NULL, exec->EmulationImageBase, exec->EmulationImageBase + exec->imgSize);
+    
+    //uc_hook_add(em->uc, &trace2, UC_HOOK_MEM_VALID, hook_memory, NULL, 0, ULLONG_MAX);
+    //uc_hook_add(uc, &trace3, UC_HOOK_MEM_INVALID, hook_invalid_memory, NULL, 0, ULLONG_MAX);
 
     //Start Emulation
     AddInitialBreakpoints();
@@ -154,15 +161,13 @@ void AllocKernelSpecificRegions()
     delete driverObject;
 
     //Fake constant memory location in kernel
-    size_t k_data_size = 0;
+    size_t k_data_size = 1;
     uint64_t kernel_data_base = 0xfffff78000000000;
-    LPVOID k_data = MapFileIntoMemory("./kernel_data.data", &k_data_size);
+    uint64_t tickCount = GetTickCount64();
     em->AddMapping(kernel_data_base, roundUp(k_data_size, 4096), UC_PROT_ALL, "Kernel Data");
-    em->WriteEmuMem(0xfffff78000000014, k_data, k_data_size);
+    em->WriteEmuMem(0xfffff78000000014, &tickCount, 8);
 
     InitialiseXMMRegs();
-
-    delete k_data;
 }
 
 void InitialiseXMMRegs()

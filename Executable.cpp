@@ -127,9 +127,12 @@ bool Executable::LoadExecutable(const std::string& exePath)
     if (!fileBase)
         return false;
 
+
+    //Test file types
     dosHeader = (PIMAGE_DOS_HEADER)fileBase;
     if (!CheckMagicHeader())
         return false;
+
 
     ntHeader = (PIMAGE_NT_HEADERS)(((BYTE*)fileBase) + dosHeader->e_lfanew);
 
@@ -144,6 +147,8 @@ bool Executable::LoadExecutable(const std::string& exePath)
 
     return true;
 }
+
+
 
 
 Executable::Executable(const std::string& path, uint64_t ImageBase)

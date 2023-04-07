@@ -360,3 +360,5 @@ MigrationBackup/
 /output_calls.txt
 /output_image_access.txt
 /output_loop.txt
+/output_param_access.txt
+/output_stack_access.txt
