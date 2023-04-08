@@ -2,13 +2,24 @@
 #include "EmulatorImportCallback.h"
 #include <iostream>
 
-Emulator::Emulator()
+Emulator::Emulator(EEmulatorType EmulatorType)
 {
 	init = false;
 	step = false;
 	breakOnImport = true;
 	useCallbacks = true;
-	uc_err err = uc_open(UC_ARCH_X86, UC_MODE_64, &uc);
+	type = EmulatorType;
+	uc_mode mode = UC_MODE_64;
+	switch (type)
+	{
+	case EMx32:
+		mode = UC_MODE_32;
+		break;
+	case EMx64:
+		mode = UC_MODE_64;
+		break;
+	};
+	uc_err err = uc_open(UC_ARCH_X86, mode, &uc);
 	if (err == UC_ERR_OK)
 		init = true;
 

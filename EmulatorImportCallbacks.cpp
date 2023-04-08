@@ -1,26 +1,27 @@
 #include "EmulatorImportCallback.h"
 #include "Emulator.h"
+#include <optional>
 #include <Windows.h>
 #include <iostream>
 
 #define STATUS_SUCCESS 0
 
-uint64_t _RtlWriteRegistryValue(uc_engine* uc)
+std::optional<uint64_t> _RtlWriteRegistryValue(uc_engine* uc)
 {
 	return STATUS_SUCCESS;
 }
 
-uint64_t _ZwOpenKey(uc_engine* uc)
+std::optional<uint64_t> _ZwOpenKey(uc_engine* uc)
 {
 	return STATUS_SUCCESS;
 }
 
-uint64_t _ZwFlushKey(uc_engine* uc)
+std::optional<uint64_t> _ZwFlushKey(uc_engine* uc)
 {
 	return STATUS_SUCCESS;
 }
 
-uint64_t _ZwClose(uc_engine* uc)
+std::optional<uint64_t> _ZwClose(uc_engine* uc)
 {
 	return STATUS_SUCCESS;
 }

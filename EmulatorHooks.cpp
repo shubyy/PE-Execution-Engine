@@ -5,6 +5,8 @@
 #include "EmulatorHooks.h"
 #include "Emulator.h"
 #include "Executable.h"
+#include <optional>
+#include "ExecutablePE.h"
 #include "Zydis/Zydis.h"
 
 class Emulator;
@@ -19,12 +21,12 @@ bool check = false;
 
 inline uint64_t convertFromPreferredModuleBase(uint64_t address)
 {
-	return (address - exec->optionalHeader->ImageBase) + exec->EmulationImageBase;
+	return (address - exec->PreferredImageBase) + exec->EmulationImageBase;
 }
 
 inline uint64_t ConvertToPreferredImageBase(uint64_t address)
 {
-	return (address - exec->EmulationImageBase) + exec->optionalHeader->ImageBase;
+	return (address - exec->EmulationImageBase) + exec->PreferredImageBase;
 }
 
 bool addressBlacklisted(uint64_t address)
@@ -265,7 +267,7 @@ void HandleUserInput()
 			if (input[1] == 'm')
 			{
 				//break using to module base address
-				bpAddress = (address - exec->optionalHeader->ImageBase) + exec->EmulationImageBase;
+				bpAddress = convertFromPreferredModuleBase(address);
 			}
 			
 			em->AddBreakpoint(bpAddress);
@@ -416,50 +418,14 @@ void hook_register(uc_engine* uc, uint64_t address, uint32_t size, void* user_da
 	}
 }
 
-void GetImportFromAddress(uint64_t address, PIMAGE_IMPORT_DESCRIPTOR* module, PIMAGE_IMPORT_BY_NAME* import)
+void hook_Import(uc_engine* uc, uint64_t address, uint32_t size, void* user_data)
 {
-	//Calculate hook function from address
-	uint64_t funcHookOffset = address - exec->IATHookBase;
+	char moduleName[MAX_IMPORT_NAME_LENGTH];
+	char importName[MAX_IMPORT_NAME_LENGTH];
 
-	PIMAGE_OPTIONAL_HEADER optionalHeader = exec->optionalHeader;
-	if (optionalHeader->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size)
-	{
-		PIMAGE_IMPORT_DESCRIPTOR importDesc = (PIMAGE_IMPORT_DESCRIPTOR)((BYTE*)exec->imgBase + optionalHeader->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
-		uint64_t startImportDesc = (uint64_t)importDesc;
-		while (importDesc->Name)
-		{
-			ULONG_PTR* OFT = (ULONG_PTR*)((BYTE*)exec->imgBase + importDesc->OriginalFirstThunk);
-			ULONG_PTR* FT = (ULONG_PTR*)((BYTE*)exec->imgBase + importDesc->FirstThunk);
+	exec->GetImportFromAddress(address, moduleName, importName);
 
-			if (!OFT)
-				OFT = FT;
-
-			for (; *OFT; ++OFT, ++FT)
-			{
-				uint64_t funcIATOffset = (uint64_t)OFT - (uint64_t)startImportDesc;
-				if (funcIATOffset == funcHookOffset)
-				{
-					//Function Match
-					PIMAGE_IMPORT_BY_NAME IATImport = (PIMAGE_IMPORT_BY_NAME)((BYTE*)exec->imgBase + *OFT);
-					*import = IATImport;
-					*module = importDesc;
-					return;
-				}
-			}
-			++importDesc;
-		}
-	}
-}
-
-void hook_IAT_exec(uc_engine* uc, uint64_t address, uint32_t size, void* user_data)
-{
-	PIMAGE_IMPORT_DESCRIPTOR importDesc;
-	PIMAGE_IMPORT_BY_NAME IATImport;
-
-	GetImportFromAddress(address, &importDesc, &IATImport);
-
-	char* modName = (char*)((BYTE*)exec->imgBase + importDesc->Name);
-	std::cout << "CALL " << modName << "->" << IATImport->Name << std::endl;
+	std::cout << "CALL " << moduleName << "->" << importName << std::endl;
 	print_emulator_cpu_state();
 
 	if (em->breakOnImport)
@@ -467,11 +433,13 @@ void hook_IAT_exec(uc_engine* uc, uint64_t address, uint32_t size, void* user_da
 
 	if (em->useCallbacks)
 	{
-		ImportCallback handler = em->GetCallback(IATImport->Name);
+		ImportCallback handler = em->GetCallback(importName);
 		if (handler)
 		{
-			uint64_t ret = (*handler)(uc);
-			em->WriteReg(UC_X86_REG_RAX, &ret);
+			std::optional<uint64_t> ret = (*handler)(uc);
+			if (ret.has_value())
+				em->WriteReg(UC_X86_REG_RAX, &ret.value());
+			
 			if(!em->callstack.empty())
 				em->callstack.pop_back();
 		}

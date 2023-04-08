@@ -3,8 +3,15 @@
 #include <vector>
 #include <unordered_map>
 #include <string>
+#include <optional>
 
-typedef ULONGLONG (*ImportCallback)(uc_engine *uc);
+enum EEmulatorType
+{
+	EMx32,
+	EMx64
+};
+
+typedef std::optional<uint64_t> (*ImportCallback)(uc_engine *uc);
 
 class EmulatorMap
 {
@@ -28,6 +35,7 @@ class Emulator
 
 public:
     uc_engine *uc;
+    EEmulatorType type;
 
     std::vector<uint64_t> emulator_breakpoints;
     std::vector<EmulatorMap*> emulator_maps;
@@ -39,7 +47,7 @@ public:
     bool breakOnImport;
     bool useCallbacks;
 
-	Emulator();
+	Emulator(EEmulatorType type);
 
     bool AddMapping(uint64_t base_address, uint64_t size, uint32_t protect, const char* name);
 

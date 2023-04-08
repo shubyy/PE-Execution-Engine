@@ -2,6 +2,8 @@
 #include <Windows.h>
 #include <string>
 
+#define MAX_IMPORT_NAME_LENGTH 128
+
 LPVOID MapFileIntoMemory(const std::string& exePath, size_t* fileSize = NULL);
 
 enum EExecType
@@ -17,32 +19,25 @@ class Executable
 {
 public:
 	LPVOID imgBase;
+	LPVOID fileBase;
 
 	uint64_t EmulationImageBase;
+	uint64_t PreferredImageBase;
 
 	size_t fileSize;
 	size_t imgSize;
-
-	
-
 	uint64_t EmulationStart;
 	uint64_t EmulationEnd;
 	uint64_t IATHookBase;
 
 	bool bInitialised;
 
-	bool CheckMagicHeader();
+	virtual bool LoadExecutable();
 
-	void AllocAndLoadSections(LPVOID fileBase);
+	virtual void ApplyImportHooks(uint64_t);
 
-	void ApplyRelocations();
+	virtual void GetImportFromAddress(uint64_t address, char *moduleName, char* importName);
 
-	void HookImports(uint64_t newBase);
-
-	void LoadHeader(LPVOID fileBase);
-
-	bool LoadExecutable(const std::string& exePath);
-
-	Executable(const std::string& path, uint64_t ImageBase = 0x0);
+	Executable(LPVOID pFileBase, uint64_t size, uint64_t ImageBase = 0x0);
 
 };

@@ -4,6 +4,7 @@
 #include "unicorn/unicorn.h"
 #include "Executable.h"
 #include "EmulatorHooks.h"
+#include "ExecutablePE.h"
 
 #define LOAD_ADDRESS 0x140000000// 0xfffff8006a300000 
 uint64_t END_ADDRESS = ULLONG_MAX;
@@ -60,7 +61,7 @@ bool SetupEmulator(EExecType type = EExecType::ExecType_PE64)
     {
         memset(hookData, 0xc3, IATHookSize);
         em->AddMappingFromSource(IATHookBase, IATHookSize, hookData, IATHookSize, UC_PROT_ALL, "IAT Hook");
-        exec->HookImports(IATHookBase);
+        exec->ApplyImportHooks(IATHookBase);
         uc_hook_add(em->uc, &IAThook, UC_HOOK_CODE, hook_IAT_exec, NULL, IATHookBase, IATHookBase + IATHookSize);
     }
     
@@ -91,7 +92,25 @@ bool SetupEmulator(EExecType type = EExecType::ExecType_PE64)
 
 int main(int argc, char* argv[])
 {
-    exec = new Executable(argv[1], LOAD_ADDRESS);
+    //exec = new Executable(argv[1], LOAD_ADDRESS);
+    size_t fileSize = 0;
+    LPVOID fileData = MapFileIntoMemory(argv[1], &fileSize);
+    if (!fileData)
+    {
+		std::cout << "Failed to load executable" << std::endl;
+		return -1;
+	}
+    
+    if(ExecutablePE32::IsValid(fileData))
+		exec = new ExecutablePE32(fileData, fileSize, LOAD_ADDRESS);
+	else if (ExecutablePE64::IsValid(fileData))
+		exec = new ExecutablePE64(fileData, fileSize, LOAD_ADDRESS);
+    else
+    {
+		std::cout << "Invalid Executable" << std::endl;
+		return -1;
+	}
+
     if (!exec->bInitialised)
     {
         std::cout << "Failed to load executable" << std::endl;
