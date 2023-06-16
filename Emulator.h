@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <string>
 #include <optional>
+#include "Executable.h"
 
 enum EEmulatorType
 {
@@ -32,10 +33,9 @@ public:
 
 class Emulator
 {
-
 public:
     uc_engine *uc;
-    EEmulatorType type;
+    Executable* exec;
 
     std::vector<uint64_t> emulator_breakpoints;
     std::vector<EmulatorMap*> emulator_maps;
@@ -47,7 +47,7 @@ public:
     bool breakOnImport;
     bool useCallbacks;
 
-	Emulator(EEmulatorType type);
+	Emulator(Executable* exec);
 
     bool AddMapping(uint64_t base_address, uint64_t size, uint32_t protect, const char* name);
 
@@ -60,6 +60,8 @@ public:
     void RegisterCallback(std::string name, ImportCallback callback);
 
     void GetAddressMapName(uint64_t address, std::string& name);
+
+    void hook_IAT_exec(uint64_t address, uint32_t size, void* user_data);
 
     void PushCall(uint64_t call_address);
     void PopCall();

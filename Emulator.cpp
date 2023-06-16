@@ -1,8 +1,9 @@
 #include "Emulator.h"
 #include "EmulatorImportCallback.h"
 #include <iostream>
+#include "Executable.h"
 
-Emulator::Emulator(EEmulatorType EmulatorType)
+Emulator(Executable* exec)
 {
 	init = false;
 	step = false;
@@ -24,6 +25,7 @@ Emulator::Emulator(EEmulatorType EmulatorType)
 		init = true;
 
 	RegisterEmulatorCallbacks(this);
+
 }
 
 bool Emulator::AddMapping(uint64_t base_address, uint64_t size, uint32_t protect, const char *name)
@@ -104,4 +106,32 @@ bool Emulator::StartEmulation(uint64_t start, uint64_t end, uint64_t timeout, si
 		return false;
 
 	return true;
+}
+
+void Emulator::hook_IAT_exec(uint64_t address, uint32_t size, void* user_data)
+{
+	PIMAGE_IMPORT_DESCRIPTOR importDesc;
+	PIMAGE_IMPORT_BY_NAME IATImport;
+
+	GetImportFromAddress(address, &importDesc, &IATImport);
+
+	char* modName = (char*)((BYTE*)exec->imgBase + importDesc->Name);
+	std::cout << "CALL " << modName << "->" << IATImport->Name << std::endl;
+	print_emulator_cpu_state();
+
+	if (em->breakOnImport)
+		HandleUserInput();
+
+	if (em->useCallbacks)
+	{
+		ImportCallback handler = em->GetCallback(IATImport->Name);
+		if (handler)
+		{
+			uint64_t ret = (*handler)(uc);
+			em->WriteReg(UC_X86_REG_RAX, &ret);
+			em->callstack.pop_back();
+		}
+	}
+
+	return;
 }

@@ -43,14 +43,12 @@ bool addressBlacklisted(uint64_t address)
 	return false;
 }
 
-
-
-std::string hexStr(const uint8_t* data, int len)
+std::string hexStr(const uint8_t* data, size_t len)
 {
 	std::stringstream ss;
 	ss << std::hex;
 
-	for (int i = len-1; i >= 0; i--)
+	for (size_t i = len-1; i >= 0; i--)
 		ss << std::setw(2) << std::setfill('0') << (int)data[i];
 
 	return ss.str();
@@ -73,7 +71,7 @@ static bool IsRing0Instruction(ZydisDisassembledInstruction* instruction)
 
 void print_call_stack()
 {
-	for (int i = em->callstack.size() - 1; i >= 0; --i)
+	for (size_t i = em->callstack.size() - 1; i >= 0; --i)
 		print_insn_at( em->callstack[i] );
 }
 
@@ -511,6 +509,7 @@ void hook_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int size, in
 	uint64_t mem_value = 0x0;
 	uint64_t r_rip;
 	uc_reg_read(uc, UC_X86_REG_RIP, &r_rip);
+	uint64_t mem_size = (uint64_t)size;
 
 	//Get Location of Address
 	std::string location;
@@ -524,14 +523,14 @@ void hook_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int size, in
 		switch (type)
 		{
 		case UC_MEM_WRITE:
-			std::cout << (LPVOID)r_rip << ":\tValue: " << (LPVOID)value << ":\tWritten To " << location << " Address: " << (LPVOID)address << "\tSize: " << (LPVOID)size << std::endl;
+			std::cout << (LPVOID)r_rip << ":\tValue: " << (LPVOID)value << ":\tWritten To " << location << " Address: " << (LPVOID)address << "\tSize: " << (LPVOID)mem_size << std::endl;
 			break;
 		case UC_MEM_READ:
 			uc_mem_read(uc, address, &mem_value, size);
-			std::cout << (LPVOID)r_rip << ":\tValue: " << (LPVOID)mem_value << ":\tRead from " << location << " Address: " << (LPVOID)address << "\tSize : " << (LPVOID)size << std::endl;
+			std::cout << (LPVOID)r_rip << ":\tValue: " << (LPVOID)mem_value << ":\tRead from " << location << " Address: " << (LPVOID)address << "\tSize : " << (LPVOID)mem_size << std::endl;
 			break;
 		case UC_MEM_FETCH:
-			std::cout << (LPVOID)r_rip << ":\tValue: " << (LPVOID)value << ":\tFetched from " << location << " Address: " << (LPVOID)address << "\tSize: " << (LPVOID)size << std::endl;
+			std::cout << (LPVOID)r_rip << ":\tValue: " << (LPVOID)value << ":\tFetched from " << location << " Address: " << (LPVOID)address << "\tSize: " << (LPVOID)mem_size << std::endl;
 			break;
 		}
 	}
@@ -575,7 +574,8 @@ void hook_parameter_memory(uc_engine* uc, uc_mem_type type, uint64_t address, in
 void hook_invalid_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int size, int64_t value, void* user_data)
 {
 	uint64_t r_rip;
+	uint64_t mem_size = (uint64_t) size;
 	uc_reg_read(uc, UC_X86_REG_RIP, &r_rip);
-	std::cout << (LPVOID) r_rip << ":\tAccess Violation at Address: " << (LPVOID)address << "\tSize: " << (LPVOID)size << std::endl;
+	std::cout << (LPVOID) r_rip << ":\tAccess Violation at Address: " << (LPVOID)address << "\tSize: " << (LPVOID)mem_size << std::endl;
 }
 

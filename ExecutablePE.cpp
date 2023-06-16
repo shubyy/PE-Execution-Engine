@@ -5,7 +5,7 @@
 #define RELOCFLAG32(RelInfo) ((RelInfo >> 0x0C) == IMAGE_REL_BASED_HIGHLOW)
 #define RELOCFLAG64(RelInfo) ((RelInfo >> 0x0C) == IMAGE_REL_BASED_DIR64)
 
-
+/*
 bool ExecutablePE32::LoadExecutable()
 {
     //Test file types
@@ -30,8 +30,9 @@ bool ExecutablePE32::LoadExecutable()
 
     return true;
 }
+*/
 
-bool ExecutablePE64::LoadExecutable()
+bool ExecutablePE::LoadExecutable()
 {
     //Test file types
     pDosHeader = (PIMAGE_DOS_HEADER)fileBase;
@@ -56,13 +57,7 @@ bool ExecutablePE64::LoadExecutable()
     return true;
 }
 
-void ExecutablePE32::LoadHeader(LPVOID fileBase)
-{
-    uint32_t sizeOfheaders = pOptionalHeader->SizeOfHeaders;
-    std::memcpy(imgBase, fileBase, sizeOfheaders);
-}
-
-void ExecutablePE64::LoadHeader(LPVOID fileBase)
+void ExecutablePE::LoadHeader(LPVOID fileBase)
 {
     uint32_t sizeOfheaders = pOptionalHeader->SizeOfHeaders;
     std::memcpy(imgBase, fileBase, sizeOfheaders);
@@ -113,8 +108,8 @@ void ExecutablePE::ApplyImportHooks(uint64_t base)
 
             for (; *OFT; ++OFT, ++FT)
             {
-                ULONG reloc = base + ((uint64_t)OFT - (uint64_t)startImportDesc);
-                *FT = reloc;
+                uint64_t reloc = base + ((uint64_t)OFT - (uint64_t)startImportDesc);
+                *FT = (ULONG)reloc;
             }
 
             ++importDesc;
@@ -149,7 +144,7 @@ void ExecutablePE::ApplyRelocations()
             {
                 uint32_t entryCount = (relocInfo->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(WORD);
                 WORD* reloc = (WORD*)(relocInfo + 1);
-                for (int i = 0; i < entryCount; i++, reloc++)
+                for (uint32_t i = 0; i < entryCount; i++, reloc++)
                 {
                     if (RELOCFLAG32(*reloc))
                     {
@@ -163,15 +158,14 @@ void ExecutablePE::ApplyRelocations()
     }
 }
 
-void ExecutablePE::GetImportFromAddress(uint64_t address, char* moduleName, char* importName)
+void ExecutablePE::GetImportFromAddress(uint64_t address, PIMAGE_IMPORT_DESCRIPTOR* module, PIMAGE_IMPORT_BY_NAME* import)
 {
     //Calculate hook function from address
     uint64_t funcHookOffset = address - IATHookBase;
 
-    IMAGE_DATA_DIRECTORY* importDir = GetDataDirectoryFromIndex(IMAGE_DIRECTORY_ENTRY_IMPORT);
-    if (importDir->Size)
+    if (pOptionalHeader->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size)
     {
-        PIMAGE_IMPORT_DESCRIPTOR importDesc = (PIMAGE_IMPORT_DESCRIPTOR)((BYTE*)imgBase + importDir->VirtualAddress);
+        PIMAGE_IMPORT_DESCRIPTOR importDesc = (PIMAGE_IMPORT_DESCRIPTOR)((BYTE*)imgBase + pOptionalHeader->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
         uint64_t startImportDesc = (uint64_t)importDesc;
         while (importDesc->Name)
         {
@@ -188,8 +182,8 @@ void ExecutablePE::GetImportFromAddress(uint64_t address, char* moduleName, char
                 {
                     //Function Match
                     PIMAGE_IMPORT_BY_NAME IATImport = (PIMAGE_IMPORT_BY_NAME)((BYTE*)imgBase + *OFT);
-                    strncpy_s(moduleName, MAX_IMPORT_NAME_LENGTH, IATImport->Name, MAX_IMPORT_NAME_LENGTH);
-                    strncpy_s(moduleName, MAX_IMPORT_NAME_LENGTH, (char*)((BYTE*)imgBase + importDesc->Name), MAX_IMPORT_NAME_LENGTH);
+                    *import = IATImport;
+                    *module = importDesc;
                     return;
                 }
             }
@@ -198,7 +192,7 @@ void ExecutablePE::GetImportFromAddress(uint64_t address, char* moduleName, char
     }
 }
 
-IMAGE_DATA_DIRECTORY* ExecutablePE64::GetDataDirectoryFromIndex(uint32_t index)
+IMAGE_DATA_DIRECTORY* ExecutablePE::GetDataDirectoryFromIndex(uint32_t index)
 {
     if(index >= IMAGE_NUMBEROF_DIRECTORY_ENTRIES)
 		return nullptr;
@@ -206,6 +200,7 @@ IMAGE_DATA_DIRECTORY* ExecutablePE64::GetDataDirectoryFromIndex(uint32_t index)
     return &pOptionalHeader->DataDirectory[index];
 }
 
+/*
 IMAGE_DATA_DIRECTORY* ExecutablePE32::GetDataDirectoryFromIndex(uint32_t index)
 {
     if (index >= IMAGE_NUMBEROF_DIRECTORY_ENTRIES)
@@ -213,8 +208,9 @@ IMAGE_DATA_DIRECTORY* ExecutablePE32::GetDataDirectoryFromIndex(uint32_t index)
 
     return &pOptionalHeader->DataDirectory[index];
 }
+*/
 
-bool ExecutablePE64::IsValid(LPVOID fileBase)
+bool ExecutablePE::IsValid(LPVOID fileBase)
 {
     if (!CheckHeader(fileBase))
         return false;
@@ -227,7 +223,7 @@ bool ExecutablePE64::IsValid(LPVOID fileBase)
     return true;
 }
 
-
+/*
 bool ExecutablePE32::IsValid(LPVOID fileBase)
 {
     if (!CheckHeader(fileBase))
@@ -241,3 +237,4 @@ bool ExecutablePE32::IsValid(LPVOID fileBase)
 
 	return true;
 }
+*/

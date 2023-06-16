@@ -34,15 +34,15 @@ PDRIVER_OBJECT CreateFakeDriverObject()
     driverObject->Size = 0x150;
     driverObject->Flags = 0x2;
     driverObject->DriverStart = (LPVOID)exec->EmulationImageBase;
-    driverObject->DriverSize = exec->imgSize;
+    driverObject->DriverSize = (ULONG)exec->imgSize;
     driverObject->DriverInit = (LPVOID)exec->EmulationStart;
 
     return driverObject;
 }
 
-bool SetupEmulator(EExecType type = EExecType::ExecType_PE64)
+bool SetupEmulator(Executable *exec, bool kernel = false)
 {
-    em = new Emulator();
+    em = new Emulator(exec);
     if (!em->init)
     {
         std::cout << "Failed to load unicorn!" << std::endl;
@@ -82,8 +82,7 @@ bool SetupEmulator(EExecType type = EExecType::ExecType_PE64)
     em->WriteReg(UC_X86_REG_RSP, &r_rsp);
     em->WriteReg(UC_X86_REG_RBP, &r_rbp);
 
-    if (type == ExecType_PE64_KERNEL)
-        AllocKernelSpecificRegions();
+    AllocKernelSpecificRegions();
 
     em->AddBreakpoint( exec->EmulationStart );
 
@@ -92,7 +91,6 @@ bool SetupEmulator(EExecType type = EExecType::ExecType_PE64)
 
 int main(int argc, char* argv[])
 {
-    //exec = new Executable(argv[1], LOAD_ADDRESS);
     size_t fileSize = 0;
     LPVOID fileData = MapFileIntoMemory(argv[1], &fileSize);
     if (!fileData)
@@ -101,10 +99,11 @@ int main(int argc, char* argv[])
 		return -1;
 	}
     
-    if(ExecutablePE32::IsValid(fileData))
-		exec = new ExecutablePE32(fileData, fileSize, LOAD_ADDRESS);
-	else if (ExecutablePE64::IsValid(fileData))
-		exec = new ExecutablePE64(fileData, fileSize, LOAD_ADDRESS);
+    if (ExecutablePE::IsValid(fileData))
+    {
+        exec = new ExecutablePE(fileData, fileSize, LOAD_ADDRESS);
+        SetupEmulator(EEmulatorType::EMx64);
+    }
     else
     {
 		std::cout << "Invalid Executable" << std::endl;
@@ -116,9 +115,9 @@ int main(int argc, char* argv[])
         std::cout << "Failed to load executable" << std::endl;
         return -1;
     }
-    SetupEmulator(ExecType_PE64_KERNEL);
+    
 
-    uc_hook trace1, trace2, jump_count_trace;
+    uc_hook trace1, jump_count_trace;
 
     exec->EmulationEnd = END_ADDRESS;
 

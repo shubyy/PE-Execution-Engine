@@ -11,8 +11,8 @@ enum EExecType
 	ExecType_Unknown,
 	ExecType_PE32,
 	ExecType_PE64,
-	ExecType_ELF,
-	ExecType_PE64_KERNEL
+	ExecType_PE64_KERNEL,
+	ExecType_ELF64 //TODO
 };
 
 class Executable
@@ -32,11 +32,9 @@ public:
 
 	bool bInitialised;
 
-	virtual bool LoadExecutable();
+	virtual bool LoadExecutable() = 0;
 
-	virtual void ApplyImportHooks(uint64_t);
-
-	virtual void GetImportFromAddress(uint64_t address, char *moduleName, char* importName);
+	virtual void ApplyImportHooks(uint64_t) = 0;
 
 	Executable(LPVOID pFileBase, uint64_t size, uint64_t ImageBase = 0x0);
 
