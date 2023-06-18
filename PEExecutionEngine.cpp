@@ -12,6 +12,8 @@ uint64_t END_ADDRESS = ULLONG_MAX;
 Executable* exec;
 Emulator* em;
 
+bool hookIAT = false;
+
 void AddInitialBreakpoints()
 {
     em->AddBreakpoint(0x140e241d2);
@@ -54,15 +56,18 @@ bool SetupEmulator(Executable *exec, bool kernel = false)
     uint64_t IATHookBase = 0x80000;
     uint64_t IATHookSize = 0x1000;
 
-    uint8_t *hookData = (uint8_t *) malloc(IATHookSize);
-    if (hookData)
+    if (hookIAT)
     {
-        memset(hookData, 0xc3, IATHookSize);
-        em->AddMappingFromSource(IATHookBase, IATHookSize, hookData, IATHookSize, UC_PROT_ALL, "IAT Hook");
-        exec->ApplyImportHooks(IATHookBase);
-        uc_hook_add(em->uc, &IAThook, UC_HOOK_CODE, hook_IAT_exec, em, IATHookBase, IATHookBase + IATHookSize);
+        uint8_t* hookData = (uint8_t*)malloc(IATHookSize);
+        if (hookData)
+        {
+            memset(hookData, 0xc3, IATHookSize);
+            em->AddMappingFromSource(IATHookBase, IATHookSize, hookData, IATHookSize, UC_PROT_ALL, "IAT Hook");
+            exec->ApplyImportHooks(IATHookBase);
+            uc_hook_add(em->uc, &IAThook, UC_HOOK_CODE, hook_IAT_exec, em, IATHookBase, IATHookBase + IATHookSize);
+        }
     }
-    
+
     //Allocate space for executable in unicorn
     //em->AddMappingFromSource(exec->EmulationImageBase, exec->allocationSize, exec->imgBase, exec->imgSize, UC_PROT_ALL, "Image");
     em->AddExistingMapping(exec->EmulationImageBase, exec->imgBase, exec->allocationSize, UC_PROT_ALL, "Image");
