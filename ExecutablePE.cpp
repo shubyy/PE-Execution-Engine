@@ -79,20 +79,19 @@ bool ExecutablePE::DumpExecutable(const std::string& path)
     {
         DWORD size = 0;
         if(i == (dFileHeader->NumberOfSections - 1))
-			size = imgSize - sectionHeader->VirtualAddress;
+			size = (DWORD)imgSize - sectionHeader->VirtualAddress;
 		else
 			size = (sectionHeader + 1)->VirtualAddress - sectionHeader->VirtualAddress;
 
-
-        size_t raw_size = sectionHeader->SizeOfRawData;
-        std::cout << "Remapping Section file offset: " << std::setw(8) << sectionHeader->Name << std::setw(4) << " from: 0x" << (LPVOID)sectionHeader->PointerToRawData << " To: 0x" << (LPVOID)sectionHeader->VirtualAddress << " Size: 0x" << (LPVOID) << std::endl;
+        std::cout << std::hex << "Remapping Section file offset: " << std::setw(8) << sectionHeader->Name << std::setw(4) << " from: 0x" << sectionHeader->PointerToRawData << " To: 0x" << sectionHeader->VirtualAddress << " Size: 0x" << size << std::endl;
 
         sectionHeader->PointerToRawData = sectionHeader->VirtualAddress;
+        sectionHeader->SizeOfRawData = size;
     }
 
     HANDLE newFile = CreateFileA(path.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     DWORD bytesWritten = 0;
-    WriteFile(newFile, dumpBase, imgSize, &bytesWritten, NULL);
+    WriteFile(newFile, dumpBase, (DWORD) imgSize, &bytesWritten, NULL);
     CloseHandle(newFile);
 
     if (bytesWritten != imgSize)
