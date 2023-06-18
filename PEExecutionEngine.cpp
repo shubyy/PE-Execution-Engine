@@ -14,16 +14,13 @@ Emulator* em;
 
 void AddInitialBreakpoints()
 {
-    em->AddBreakpoint(0x14052e931);
-    //em->AddBreakpoint(0x1402193a9);
-    //em->AddBreakpoint(0x1402193D6);
-    //em->AddBreakpoint(0x14066866a);
-    //em->AddBreakpoint(0x1406a0dd2);
+    em->AddBreakpoint(0x140e241d2);
 }
 
 void SetEmulatorSettings()
 {
     em->breakOnImport = true;
+    AddInitialBreakpoints();
 }
 
 PDRIVER_OBJECT CreateFakeDriverObject()
@@ -42,7 +39,8 @@ PDRIVER_OBJECT CreateFakeDriverObject()
 
 bool SetupEmulator(Executable *exec, bool kernel = false)
 {
-    em = new Emulator(exec);
+    exec->LoadExecutable();
+    em = new Emulator(exec, EMx64);
     if (!em->init)
     {
         std::cout << "Failed to load unicorn!" << std::endl;
@@ -62,15 +60,15 @@ bool SetupEmulator(Executable *exec, bool kernel = false)
         memset(hookData, 0xc3, IATHookSize);
         em->AddMappingFromSource(IATHookBase, IATHookSize, hookData, IATHookSize, UC_PROT_ALL, "IAT Hook");
         exec->ApplyImportHooks(IATHookBase);
-        uc_hook_add(em->uc, &IAThook, UC_HOOK_CODE, hook_IAT_exec, NULL, IATHookBase, IATHookBase + IATHookSize);
+        uc_hook_add(em->uc, &IAThook, UC_HOOK_CODE, hook_IAT_exec, em, IATHookBase, IATHookBase + IATHookSize);
     }
     
     //Allocate space for executable in unicorn
-    uint64_t uc_mem_size = roundUp((int)exec->imgSize, 4096);
-    em->AddMappingFromSource(exec->EmulationImageBase, uc_mem_size, exec->imgBase, exec->imgSize, UC_PROT_ALL, "Image");
+    //em->AddMappingFromSource(exec->EmulationImageBase, exec->allocationSize, exec->imgBase, exec->imgSize, UC_PROT_ALL, "Image");
+    em->AddExistingMapping(exec->EmulationImageBase, exec->imgBase, exec->allocationSize, UC_PROT_ALL, "Image");
 
     //Choose Heap and Stack
-    uint64_t stack_bottom = roundUp(exec->EmulationImageBase + uc_mem_size - 0xFFFF000000, 0x1000);
+    uint64_t stack_bottom = roundUp(exec->EmulationImageBase + exec->allocationSize - 0xFFFF000000, 0x1000);
     uint64_t initial_stack_Size = 8 * 4096;
     uint64_t stack_top = stack_bottom + initial_stack_Size;
     em->AddMapping(stack_bottom, initial_stack_Size, UC_PROT_READ | UC_PROT_WRITE, "Stack");
@@ -102,7 +100,7 @@ int main(int argc, char* argv[])
     if (ExecutablePE::IsValid(fileData))
     {
         exec = new ExecutablePE(fileData, fileSize, LOAD_ADDRESS);
-        SetupEmulator(EEmulatorType::EMx64);
+        SetupEmulator(exec, EEmulatorType::EMx64);
     }
     else
     {
@@ -116,45 +114,26 @@ int main(int argc, char* argv[])
         return -1;
     }
     
-
     uc_hook trace1, jump_count_trace;
-
     exec->EmulationEnd = END_ADDRESS;
 
     std::cout << "\nEmulation Start Address: " << (LPVOID) exec->EmulationStart << std::endl;
     std::cout << "Emulation End Address: " << (LPVOID) exec->EmulationEnd << std::endl;
     std::cout << std::hex << "\nImage Mapping: 0x" << exec->EmulationImageBase << "-0x" << exec->EmulationImageBase + exec->imgSize << std::endl << std::endl;
     
-    
-    uc_hook_add(em->uc, &trace1, UC_HOOK_CODE, hook_instruction, NULL, exec->EmulationImageBase, exec->EmulationImageBase + exec->imgSize);
-    uc_hook_add(em->uc, &jump_count_trace, UC_HOOK_CODE, hook_jump_count, NULL, exec->EmulationImageBase, exec->EmulationImageBase + exec->imgSize);
-    
-    //uc_hook_add(em->uc, &trace2, UC_HOOK_MEM_VALID, hook_memory, NULL, 0, ULLONG_MAX);
-    //uc_hook_add(uc, &trace3, UC_HOOK_MEM_INVALID, hook_invalid_memory, NULL, 0, ULLONG_MAX);
+    uc_hook_add(em->uc, &trace1, UC_HOOK_CODE, hook_instruction, em, exec->EmulationImageBase, exec->EmulationImageBase + exec->imgSize);
+    uc_hook_add(em->uc, &jump_count_trace, UC_HOOK_CODE, hook_jump_count, em, exec->EmulationImageBase, exec->EmulationImageBase + exec->imgSize);
+    //uc_hook_add(em->uc, &trace2, UC_HOOK_MEM_VALID, hook_memory, em, 0, ULLONG_MAX);
+    //uc_hook_add(uc, &trace3, UC_HOOK_MEM_INVALID, hook_invalid_memory, em, 0, ULLONG_MAX);
 
     //Start Emulation
-    AddInitialBreakpoints();
     bool success = em->StartEmulation(exec->EmulationStart, exec->EmulationEnd, 0, 0);
     if (!success)
         std::cout << "\nFailed to emulate executable\n\nState: \n" << std::endl;
     else
         std::cout << "\nFinished Emulating Executable to desired address!\n\nState: \n" << std::endl;
 
-    print_emulator_cpu_state();
     std::cout << std::endl;
-
-    //size_t DriverObjectSize = sizeof(DRIVER_OBJECT);
-    //PDRIVER_OBJECT driverObject = new DRIVER_OBJECT();
-    //if (uc_mem_read(uc, param_1_driverObject, (LPVOID)driverObject, sizeof(driverObject)) == UC_ERR_OK)
-    //{
-
-        //std::cout << "Driver Object Major Functions:" << std::endl;
-        //int size = sizeof(driverObject->MajorFunction) / sizeof(LPVOID);
-        //for (int i = 0; i < size; i++)
-            //std::cout << i << ": " << (LPVOID)driverObject->MajorFunction[i] << std::endl;
-    //}
-
-    //delete driverObject;
 
     return 0;
 

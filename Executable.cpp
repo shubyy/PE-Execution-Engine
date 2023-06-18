@@ -16,9 +16,16 @@ Executable::Executable(LPVOID pFileBase, uint64_t size, uint64_t ImageBase)
     EmulationImageBase = ImageBase;
     bInitialised = false;
     PreferredImageBase = 0x0;
+}
 
-    if (LoadExecutable())
-        bInitialised = true;
+uint64_t Executable::convertFromPreferredModuleBase(uint64_t address)
+{
+    return (address - PreferredImageBase) + EmulationImageBase;
+}
+
+uint64_t Executable::ConvertToPreferredImageBase(uint64_t address)
+{
+    return (address - EmulationImageBase) + PreferredImageBase;
 }
 
 LPVOID MapFileIntoMemory(const std::string& exePath, size_t* fileSize)
@@ -38,4 +45,16 @@ LPVOID MapFileIntoMemory(const std::string& exePath, size_t* fileSize)
         *fileSize = fSize;
 
     return exeData;
+}
+
+uint64_t roundUp(uint64_t numToRound, uint64_t multiple)
+{
+    if (multiple == 0)
+        return numToRound;
+
+    uint64_t remainder = numToRound % multiple;
+    if (remainder == 0)
+        return numToRound;
+
+    return numToRound + multiple - remainder;
 }

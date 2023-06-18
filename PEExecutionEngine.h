@@ -1,18 +1,6 @@
 #pragma once
 #include <Windows.h>
 
-uint64_t roundUp(uint64_t numToRound, uint64_t multiple)
-{
-    if (multiple == 0)
-        return numToRound;
-
-    uint64_t remainder = numToRound % multiple;
-    if (remainder == 0)
-        return numToRound;
-
-    return numToRound + multiple - remainder;
-}
-
 typedef struct _UNICODE_STRING
 {
     USHORT Length;

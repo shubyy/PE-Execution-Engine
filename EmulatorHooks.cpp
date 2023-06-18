@@ -1,13 +1,101 @@
+#include "EmulatorHooks.h"
+#include "ExecutablePE.h"
+#include <iostream>
+
+size_t skip_first = 15000;
+size_t jump_count = 0;
+
+bool check = false;
+
+void hook_IAT_exec(uc_engine* uc, uint64_t address, uint32_t size, void* user_data)
+{
+	PIMAGE_IMPORT_DESCRIPTOR importDesc;
+	PIMAGE_IMPORT_BY_NAME IATImport;
+
+	Emulator* em = (Emulator*)user_data;
+	ExecutablePE* exec = dynamic_cast<ExecutablePE*>(em->exec);
+
+	exec->GetImportFromAddress(address, &importDesc, &IATImport);
+
+	char* modName = (char*)((BYTE*)exec->imgBase + importDesc->Name);
+	std::cout << "CALL " << modName << "->" << IATImport->Name << std::endl;
+	em->print_emulator_cpu_state();
+
+	if (em->breakOnImport)
+		em->HandleUserInput();
+
+	if (em->useCallbacks)
+	{
+		ImportCallback handler = em->GetCallback(IATImport->Name);
+		if (handler)
+		{
+			std::optional<uint64_t> ret = (*handler)(uc);
+			if (ret.has_value())
+			{
+				em->WriteReg(UC_X86_REG_RAX, &ret);
+			}
+			em->callstack.pop_back();
+		}
+	}
+
+	return;
+}
+
+void hook_instruction(uc_engine* uc, uint64_t address, uint32_t size, void* user_data)
+{
+	Emulator* em = (Emulator*)user_data;
+	ExecutablePE* exec = dynamic_cast<ExecutablePE*>(em->exec);
+
+	LPVOID real_address = (LPVOID)((BYTE*)exec->imgBase + (address - exec->EmulationImageBase));
+	ZydisDisassembledInstruction instruction;
+
+	if (ZYAN_SUCCESS(ZydisDisassembleIntel(ZYDIS_MACHINE_MODE_LONG_64, address, real_address, 16, &instruction)))
+	{
+		ZydisMnemonic mnem = instruction.info.mnemonic;
+		if (em->IsAddressBreakpoint(address) || em->step)
+		{
+			std::cout << std::endl << "+" << jump_count << std::endl;
+			em->print_insn(&instruction);
+			em->print_emulator_cpu_state();
+			em->HandleUserInput();
+		}
+
+		if (mnem == ZYDIS_MNEMONIC_CALL)
+			em->PushCall(address);
+		else if (mnem == ZYDIS_MNEMONIC_RET)
+			em->PopCall();
+	}
+}
+
+void hook_jump_count(uc_engine* uc, uint64_t address, uint32_t size, void* user_data)
+{
+	Emulator* em = (Emulator*)user_data;
+	ExecutablePE* exec = dynamic_cast<ExecutablePE*>(em->exec);
+
+	LPVOID real_address = (LPVOID)((BYTE*)exec->imgBase + (address - exec->EmulationImageBase));
+	ZydisDisassembledInstruction instruction;
+	if (ZYAN_SUCCESS(ZydisDisassembleIntel(ZYDIS_MACHINE_MODE_LONG_64, address, real_address, 16, &instruction)))
+	{
+		ZydisMnemonic mnem = instruction.info.mnemonic;
+		if (mnem == ZYDIS_MNEMONIC_JMP)
+		{
+			jump_count++;
+		}
+	}
+}
+
+/*
 #include <iostream>
 #include <iomanip>
 #include <sstream>
 
-#include "EmulatorHooks.h"
-#include "Emulator.h"
+
+
 #include "Executable.h"
 #include <optional>
 #include "ExecutablePE.h"
-#include "Zydis/Zydis.h"
+
+
 
 class Emulator;
 
@@ -358,28 +446,7 @@ void HandleUserInput()
 	
 }
 
-void hook_instruction(uc_engine* uc, uint64_t address, uint32_t size, void* user_data)
-{
-	LPVOID real_address = (LPVOID)((BYTE*)exec->imgBase + (address - exec->EmulationImageBase));
-	ZydisDisassembledInstruction instruction;
-	
-	if (ZYAN_SUCCESS(ZydisDisassembleIntel(ZYDIS_MACHINE_MODE_LONG_64, address, real_address, 16, &instruction)))
-	{
-		ZydisMnemonic mnem = instruction.info.mnemonic;
-		if (isAddressBreakpoint(address) || em->step)
-		{
-			std::cout << std::endl << "+" << jump_count << std::endl;
-			print_insn(&instruction);
-			print_emulator_cpu_state();
-			HandleUserInput();
-		}
 
-		if (mnem == ZYDIS_MNEMONIC_CALL)
-			em->PushCall(address);
-		else if (mnem == ZYDIS_MNEMONIC_RET)
-			em->PopCall();
-	}
-}
 
 void hook_ring0_instruction(uc_engine* uc, uint64_t address, uint32_t size, void* user_data)
 {
@@ -542,7 +609,7 @@ void hook_custom_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int s
 	/*if (address >= param_1_driverObject && address <= param_2_registryPath + 0x8)
 	{
 
-	}*/
+	}
 }
 
 void hook_parameter_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int size, int64_t value, void* user_data)
@@ -568,7 +635,7 @@ void hook_parameter_memory(uc_engine* uc, uc_mem_type type, uint64_t address, in
 			std::cout << (LPVOID)r_rip << ":\tValue: " << (LPVOID)value << ":\tFetched from " << (LPVOID)address << "\tSize: " << (LPVOID)size << std::endl;
 			break;
 		}
-	}*/
+	}
 }
 
 void hook_invalid_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int size, int64_t value, void* user_data)
@@ -579,3 +646,4 @@ void hook_invalid_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int 
 	std::cout << (LPVOID) r_rip << ":\tAccess Violation at Address: " << (LPVOID)address << "\tSize: " << (LPVOID)mem_size << std::endl;
 }
 
+*/

@@ -1,10 +1,12 @@
 #pragma once
 #include "unicorn/unicorn.h"
+#include "Zydis/Zydis.h"
 #include <vector>
 #include <unordered_map>
 #include <string>
 #include <optional>
-#include "Executable.h"
+
+class Executable;
 
 enum EEmulatorType
 {
@@ -36,6 +38,7 @@ class Emulator
 public:
     uc_engine *uc;
     Executable* exec;
+    EEmulatorType type;
 
     std::vector<uint64_t> emulator_breakpoints;
     std::vector<EmulatorMap*> emulator_maps;
@@ -47,11 +50,13 @@ public:
     bool breakOnImport;
     bool useCallbacks;
 
-	Emulator(Executable* exec);
+    Emulator(Executable* exec, EEmulatorType EmulatorType);
 
     bool AddMapping(uint64_t base_address, uint64_t size, uint32_t protect, const char* name);
 
     bool AddMappingFromSource(uint64_t base_address, uint64_t map_size, void* source, uint64_t source_size, uint32_t protect, const char* name);
+
+    bool AddExistingMapping(uint64_t base_address, void* source, uint64_t source_size, uint32_t protect, const char* name);
 
     bool WriteEmuMem(uint64_t base_address, void* source, uint64_t size);
 
@@ -61,10 +66,22 @@ public:
 
     void GetAddressMapName(uint64_t address, std::string& name);
 
-    void hook_IAT_exec(uint64_t address, uint32_t size, void* user_data);
+    void HandleUserInput();
+
+    void print_memory(uint64_t address, size_t size);
+
+    void print_call_stack();
+
+    void print_insn(ZydisDisassembledInstruction* instruction);
+
+    void print_insn_at(uint64_t address);
+
+    void print_emulator_cpu_state();
 
     void PushCall(uint64_t call_address);
     void PopCall();
+
+    bool IsAddressBreakpoint(uint64_t address);
 
     ImportCallback GetCallback(std::string name);
 
@@ -85,3 +102,4 @@ public:
 };
 
 
+std::string hexStr(const uint8_t* data, size_t len);

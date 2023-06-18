@@ -54,6 +54,50 @@ bool ExecutablePE::LoadExecutable()
     if (!imgBase)
         return false;
 
+    bInitialised = true;
+    return true;
+}
+
+bool ExecutablePE::DumpExecutable(const std::string& path)
+{
+    void* dumpBase = VirtualAlloc(NULL,
+        imgSize,
+        MEM_COMMIT | MEM_RESERVE,
+        PAGE_READWRITE);
+
+    if (!dumpBase)
+        return false;
+
+    CopyMemory(dumpBase, imgBase, imgSize);
+
+    PIMAGE_DOS_HEADER dDosHeader = (PIMAGE_DOS_HEADER)dumpBase;
+    PIMAGE_NT_HEADERS dNTHeader = (PIMAGE_NT_HEADERS)(((BYTE*)dumpBase) + dDosHeader->e_lfanew);
+    PIMAGE_FILE_HEADER dFileHeader = &dNTHeader->FileHeader;
+    PIMAGE_SECTION_HEADER firstSection = IMAGE_FIRST_SECTION(dNTHeader);
+    IMAGE_SECTION_HEADER* sectionHeader = firstSection;
+    for (int i = 0; i != dFileHeader->NumberOfSections; i++, sectionHeader++)
+    {
+        DWORD size = 0;
+        if(i == (dFileHeader->NumberOfSections - 1))
+			size = imgSize - sectionHeader->VirtualAddress;
+		else
+			size = (sectionHeader + 1)->VirtualAddress - sectionHeader->VirtualAddress;
+
+
+        size_t raw_size = sectionHeader->SizeOfRawData;
+        std::cout << "Remapping Section file offset: " << std::setw(8) << sectionHeader->Name << std::setw(4) << " from: 0x" << (LPVOID)sectionHeader->PointerToRawData << " To: 0x" << (LPVOID)sectionHeader->VirtualAddress << " Size: 0x" << (LPVOID) << std::endl;
+
+        sectionHeader->PointerToRawData = sectionHeader->VirtualAddress;
+    }
+
+    HANDLE newFile = CreateFileA(path.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    DWORD bytesWritten = 0;
+    WriteFile(newFile, dumpBase, imgSize, &bytesWritten, NULL);
+    CloseHandle(newFile);
+
+    if (bytesWritten != imgSize)
+        return false;
+
     return true;
 }
 
@@ -65,8 +109,9 @@ void ExecutablePE::LoadHeader(LPVOID fileBase)
 
 void ExecutablePE::AllocAndLoadSections(IMAGE_SECTION_HEADER* firstSection, LPVOID fileBase)
 {
+    allocationSize = roundUp(imgSize, 4096);
     imgBase = VirtualAlloc(NULL,
-        imgSize,
+        allocationSize,
         MEM_COMMIT | MEM_RESERVE,
         PAGE_READWRITE);
 

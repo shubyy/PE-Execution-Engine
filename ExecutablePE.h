@@ -19,6 +19,7 @@ public:
 	void GetImportFromAddress(uint64_t address, PIMAGE_IMPORT_DESCRIPTOR* module, PIMAGE_IMPORT_BY_NAME* import);
 	virtual IMAGE_DATA_DIRECTORY* GetDataDirectoryFromIndex(uint32_t);
 	bool LoadExecutable() override;
+	bool DumpExecutable(const std::string& path) override;
 	static bool IsValid(LPVOID fileBase);
 };
 
