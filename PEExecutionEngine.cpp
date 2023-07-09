@@ -16,7 +16,10 @@ bool hookIAT = false;
 
 void AddInitialBreakpoints()
 {
-    em->AddBreakpoint(0x140e241d2);
+    //em->AddBreakpoint(0x140e241d2);
+    //em->AddBreakpoint(0x140a01c84);
+    em->AddBreakpoint(0x14089b571);
+    em->AddBreakpoint(0x140A64E8F);
 }
 
 void SetEmulatorSettings()
@@ -37,6 +40,21 @@ PDRIVER_OBJECT CreateFakeDriverObject()
     driverObject->DriverInit = (LPVOID)exec->EmulationStart;
 
     return driverObject;
+}
+
+PTIB CreateFakeTIBObject(Emulator *em, uint64_t TIBAddr)
+{
+    EmulatorMap *stackMap = em->GetMapFromName("Stack");
+    //Allocate Driver Object structure
+    PTIB _tibblock = new TIB();
+    _tibblock->Self = (LPVOID) TIBAddr;
+    _tibblock->StackBase = (LPVOID)(stackMap->m_map_start + stackMap->m_map_size);
+    _tibblock->StackLimit = (LPVOID) stackMap->m_map_start;
+    _tibblock->ExceptionList = 0x0;
+    _tibblock->SubSystemTib = 0x0;
+    _tibblock->FiberData = 0x0;
+
+    return _tibblock;
 }
 
 bool SetupEmulator(Executable *exec, bool kernel = false)
@@ -85,7 +103,8 @@ bool SetupEmulator(Executable *exec, bool kernel = false)
     em->WriteReg(UC_X86_REG_RSP, &r_rsp);
     em->WriteReg(UC_X86_REG_RBP, &r_rbp);
 
-    AllocKernelSpecificRegions();
+    //AllocKernelSpecificRegions();
+    AllocAndSetTIBBlock();
 
     em->AddBreakpoint( exec->EmulationStart );
 
@@ -116,7 +135,7 @@ int main(int argc, char* argv[])
     if (!exec->bInitialised)
     {
         std::cout << "Failed to load executable" << std::endl;
-        return -1;
+        return -1;  
     }
     
     uc_hook trace1, jump_count_trace;
@@ -127,8 +146,8 @@ int main(int argc, char* argv[])
     std::cout << std::hex << "\nImage Mapping: 0x" << exec->EmulationImageBase << "-0x" << exec->EmulationImageBase + exec->imgSize << std::endl << std::endl;
     
     uc_hook_add(em->uc, &trace1, UC_HOOK_CODE, hook_instruction, em, exec->EmulationImageBase, exec->EmulationImageBase + exec->imgSize);
-    uc_hook_add(em->uc, &jump_count_trace, UC_HOOK_CODE, hook_jump_count, em, exec->EmulationImageBase, exec->EmulationImageBase + exec->imgSize);
-    //uc_hook_add(em->uc, &trace2, UC_HOOK_MEM_VALID, hook_memory, em, 0, ULLONG_MAX);
+    //uc_hook_add(em->uc, &jump_count_trace, UC_HOOK_CODE, hook_jump_count, em, exec->EmulationImageBase, exec->EmulationImageBase + exec->imgSize);
+    //uc_hook_add(em->uc, &trace1, UC_HOOK_MEM_VALID, hook_memory, em, 0, ULLONG_MAX);
     //uc_hook_add(uc, &trace3, UC_HOOK_MEM_INVALID, hook_invalid_memory, em, 0, ULLONG_MAX);
 
     //Start Emulation
@@ -138,11 +157,28 @@ int main(int argc, char* argv[])
     else
         std::cout << "\nFinished Emulating Executable to desired address!\n\nState: \n" << std::endl;
 
+    em->print_emulator_cpu_state();
+
     std::cout << std::endl;
 
     return 0;
 
 }
+
+void AllocAndSetTIBBlock()
+{
+    uint64_t TIBBase = 0x4000;
+
+    EmulatorMap* TIBMap = em->AddMapping(TIBBase, 0x1000, UC_PROT_ALL, "TIBMap");
+    PTIB tibBlock = CreateFakeTIBObject(em, TIBBase);
+    em->WriteEmuMem(TIBBase, tibBlock, sizeof(TIB));
+    em->WriteReg(UC_X86_REG_GS, &TIBBase);
+    if (!em->WriteMSR(0xC0000101, TIBBase))
+    {
+        std::cout << "Failed to write segment register to MSR" << std::endl;
+    }
+}
+
 
 void AllocKernelSpecificRegions()
 {

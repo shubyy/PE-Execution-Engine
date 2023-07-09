@@ -27,6 +27,17 @@ typedef struct _DRIVER_OBJECT
     LPVOID MajorFunction[28];
 } DRIVER_OBJECT, *PDRIVER_OBJECT;
 
+typedef struct _TIB
+{
+    LPVOID ExceptionList;
+	LPVOID StackBase;
+	LPVOID StackLimit;
+	LPVOID SubSystemTib;
+	LPVOID FiberData;
+	LPVOID ArbitraryUserPointer;
+	LPVOID Self;    
+} TIB, *PTIB;
 
+void AllocAndSetTIBBlock();
 void AllocKernelSpecificRegions();
 void InitialiseXMMRegs();

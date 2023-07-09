@@ -34,11 +34,45 @@ void hook_IAT_exec(uc_engine* uc, uint64_t address, uint32_t size, void* user_da
 			{
 				em->WriteReg(UC_X86_REG_RAX, &ret);
 			}
-			em->callstack.pop_back();
+			//em->callstack.pop_back();
 		}
 	}
 
 	return;
+}
+
+
+void hook_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int size, int64_t value, void* user_data)
+{
+	Emulator* em = (Emulator*)user_data;
+	ExecutablePE* exec = dynamic_cast<ExecutablePE*>(em->exec);
+
+	uint64_t mem_value = 0x0;
+	uint64_t r_rip;
+	uc_reg_read(uc, UC_X86_REG_RIP, &r_rip);
+	uint64_t mem_size = (uint64_t)size;
+
+	//Get Location of Address
+	std::string location;
+	em->GetAddressMapName(address, location);
+
+	if (location == "Stack")
+	{
+		switch (type)
+		{
+		case UC_MEM_WRITE:
+			std::cout << (LPVOID)r_rip << ":\tValue: " << (LPVOID)value << ":\tWritten To " << location << " Address: " << (LPVOID)address << "\tSize: " << (LPVOID)mem_size << std::endl;
+			break;
+		case UC_MEM_READ:
+			uc_mem_read(uc, address, &mem_value, size);
+			std::cout << (LPVOID)r_rip << ":\tValue: " << (LPVOID)mem_value << ":\tRead from " << location << " Address: " << (LPVOID)address << "\tSize : " << (LPVOID)mem_size << std::endl;
+			break;
+		case UC_MEM_FETCH:
+			std::cout << (LPVOID)r_rip << ":\tValue: " << (LPVOID)value << ":\tFetched from " << location << " Address: " << (LPVOID)address << "\tSize: " << (LPVOID)mem_size << std::endl;
+			break;
+		}
+	}
+
 }
 
 void hook_instruction(uc_engine* uc, uint64_t address, uint32_t size, void* user_data)
@@ -52,6 +86,9 @@ void hook_instruction(uc_engine* uc, uint64_t address, uint32_t size, void* user
 	if (ZYAN_SUCCESS(ZydisDisassembleIntel(ZYDIS_MACHINE_MODE_LONG_64, address, real_address, 16, &instruction)))
 	{
 		ZydisMnemonic mnem = instruction.info.mnemonic;
+		if (mnem == ZYDIS_MNEMONIC_JMP)
+			jump_count++;
+
 		if (em->IsAddressBreakpoint(address) || em->step)
 		{
 			std::cout << std::endl << "+" << jump_count << std::endl;
@@ -60,27 +97,28 @@ void hook_instruction(uc_engine* uc, uint64_t address, uint32_t size, void* user
 			em->HandleUserInput();
 		}
 
+		if (em->breakOnJump)
+			hook_jump_instruction(em, &instruction);
+		/*
 		if (mnem == ZYDIS_MNEMONIC_CALL)
 			em->PushCall(address);
 		else if (mnem == ZYDIS_MNEMONIC_RET)
 			em->PopCall();
+		*/
 	}
 }
 
-void hook_jump_count(uc_engine* uc, uint64_t address, uint32_t size, void* user_data)
+void hook_jump_instruction(Emulator *em, ZydisDisassembledInstruction *instruction)
 {
-	Emulator* em = (Emulator*)user_data;
-	ExecutablePE* exec = dynamic_cast<ExecutablePE*>(em->exec);
+	ZydisMnemonic mnem = instruction->info.mnemonic;
 
-	LPVOID real_address = (LPVOID)((BYTE*)exec->imgBase + (address - exec->EmulationImageBase));
-	ZydisDisassembledInstruction instruction;
-	if (ZYAN_SUCCESS(ZydisDisassembleIntel(ZYDIS_MACHINE_MODE_LONG_64, address, real_address, 16, &instruction)))
+	if (mnem >= ZYDIS_MNEMONIC_JB && mnem <= ZYDIS_MNEMONIC_JZ || mnem == ZYDIS_MNEMONIC_CALL || mnem == ZYDIS_MNEMONIC_RET)
 	{
-		ZydisMnemonic mnem = instruction.info.mnemonic;
-		if (mnem == ZYDIS_MNEMONIC_JMP)
-		{
-			jump_count++;
-		}
+		std::cout << std::endl << "+" << jump_count << std::endl;
+		em->print_insn(instruction);
+		em->print_emulator_cpu_state();
+		em->HandleUserInput();
+		
 	}
 }
 
@@ -569,39 +607,6 @@ void hook_jump_count(uc_engine* uc, uint64_t address, uint32_t size, void* user_
 			jump_count++;
 		}
 	}
-}
-
-void hook_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int size, int64_t value, void* user_data)
-{
-	uint64_t mem_value = 0x0;
-	uint64_t r_rip;
-	uc_reg_read(uc, UC_X86_REG_RIP, &r_rip);
-	uint64_t mem_size = (uint64_t)size;
-
-	//Get Location of Address
-	std::string location;
-	em->GetAddressMapName(address, location);
-	
-	if (addressBlacklisted(r_rip))
-		return;
-
-	if (location == "Stack")
-	{
-		switch (type)
-		{
-		case UC_MEM_WRITE:
-			std::cout << (LPVOID)r_rip << ":\tValue: " << (LPVOID)value << ":\tWritten To " << location << " Address: " << (LPVOID)address << "\tSize: " << (LPVOID)mem_size << std::endl;
-			break;
-		case UC_MEM_READ:
-			uc_mem_read(uc, address, &mem_value, size);
-			std::cout << (LPVOID)r_rip << ":\tValue: " << (LPVOID)mem_value << ":\tRead from " << location << " Address: " << (LPVOID)address << "\tSize : " << (LPVOID)mem_size << std::endl;
-			break;
-		case UC_MEM_FETCH:
-			std::cout << (LPVOID)r_rip << ":\tValue: " << (LPVOID)value << ":\tFetched from " << location << " Address: " << (LPVOID)address << "\tSize: " << (LPVOID)mem_size << std::endl;
-			break;
-		}
-	}
-	
 }
 
 void hook_custom_memory(uc_engine* uc, uc_mem_type type, uint64_t address, int size, int64_t value, void* user_data)

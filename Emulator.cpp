@@ -12,6 +12,8 @@ Emulator::Emulator(Executable* exec, EEmulatorType EmulatorType)
 	step = false;
 	breakOnImport = true;
 	useCallbacks = true;
+	breakOnRet = false;
+	breakOnJump = false;
 	this->exec = exec;
 	type = EmulatorType;
 	uc_mode mode = UC_MODE_64;
@@ -32,7 +34,7 @@ Emulator::Emulator(Executable* exec, EEmulatorType EmulatorType)
 
 }
 
-bool Emulator::AddMapping(uint64_t base_address, uint64_t size, uint32_t protect, const char *name)
+EmulatorMap* Emulator::AddMapping(uint64_t base_address, uint64_t size, uint32_t protect, const char *name)
 {
 	uc_err err = uc_mem_map(uc, base_address, size, protect);
 
@@ -41,26 +43,33 @@ bool Emulator::AddMapping(uint64_t base_address, uint64_t size, uint32_t protect
 		EmulatorMap* map = new EmulatorMap(name, base_address, size, protect);
 		std::cout << "Added Map: " << name << "\t" << (LPVOID)base_address << "-" << (LPVOID)(base_address + size) << std::endl;
 		emulator_maps.push_back(map);
-		return true;
+		return map;
 	}
 	std::cout << "uc err: " << err << std::endl;
-	return false;
+	return NULL;
 }
 
-bool Emulator::AddMappingFromSource(uint64_t base_address, uint64_t map_size, void* source, uint64_t source_size, uint32_t protect, const char* name)
+void Emulator::RemoveMap(EmulatorMap* map)
 {
+	uc_mem_unmap(uc, map->m_map_start, map->m_map_size);
+	emulator_maps.remove(map);
+	delete map;
+}
+
+EmulatorMap* Emulator::AddMappingFromSource(uint64_t base_address, uint64_t map_size, void* source, uint64_t source_size, uint32_t protect, const char* name)
+{
+	EmulatorMap* map = NULL;
 	if (map_size < source_size)
-		return false;
+		return NULL;
 	
-	if (AddMapping(base_address, map_size, protect, name) && WriteEmuMem(base_address, source, source_size))
-		return true;
+	if ((map = AddMapping(base_address, map_size, protect, name)) != NULL && WriteEmuMem(base_address, source, source_size))
+		return map;
 
-	return false;
+	return NULL;
 }
 
-bool Emulator::AddExistingMapping(uint64_t base_address, void* source, uint64_t source_size, uint32_t protect, const char* name)
+EmulatorMap* Emulator::AddExistingMapping(uint64_t base_address, void* source, uint64_t source_size, uint32_t protect, const char* name)
 {
-
 	uc_err err = uc_mem_map_ptr(uc, base_address, source_size, protect, source);
 
 	if (err == UC_ERR_OK)
@@ -68,10 +77,10 @@ bool Emulator::AddExistingMapping(uint64_t base_address, void* source, uint64_t 
 		EmulatorMap* map = new EmulatorMap(name, base_address, source_size, protect);
 		std::cout << "Added Map: " << name << "\t" << (LPVOID)base_address << "-" << (LPVOID)(base_address + source_size) << std::endl;
 		emulator_maps.push_back(map);
-		return true;
+		return map;
 	}
 	std::cout << "uc err: " << err << std::endl;
-	return false;
+	return NULL;
 }
 
 bool Emulator::WriteEmuMem(uint64_t base_address, void* source, uint64_t size)
@@ -80,6 +89,17 @@ bool Emulator::WriteEmuMem(uint64_t base_address, void* source, uint64_t size)
 		return false;
 
 	return true;
+}
+
+EmulatorMap* Emulator::GetMapFromName(const char* name)
+{
+	for (auto *map : emulator_maps)
+	{
+		if (strcmp(map->map_name, name) == 0)
+			return map;
+	}
+
+	return NULL;
 }
 
 void Emulator::RegisterCallback(std::string name, ImportCallback callback)
@@ -108,6 +128,38 @@ ImportCallback Emulator::GetCallback(std::string name)
 		return itr->second;
 
 	return NULL;
+}
+
+bool Emulator::WriteMSR(uint64_t reg, uint64_t value)
+{
+	uint64_t orax;
+	uint64_t ordx;
+	uint64_t orcx;
+	ReadReg(UC_X86_REG_RAX, &orax);
+	ReadReg(UC_X86_REG_RAX, &ordx);
+	ReadReg(UC_X86_REG_RAX, &orcx);
+
+	//x86: wrmsr
+	byte buf[] = { 0x0f, 0x30 };
+	uint64_t scratch = 0x1000;
+	EmulatorMap *wrmap = AddMappingFromSource(scratch, 0x1000, buf, sizeof(buf), UC_PROT_ALL, "msr_write");
+
+	uint64_t irax = value & 0xFFFFFFFF;
+	uint64_t irdx = (value >> 32) & 0xFFFFFFFF;
+	uint64_t ircx = reg & 0xFFFFFFFF;
+	WriteReg(UC_X86_REG_RAX, &irax);
+	WriteReg(UC_X86_REG_RDX, &irdx);
+	WriteReg(UC_X86_REG_RCX, &ircx);
+
+	//Run wrmsr instruction
+	bool success = StartEmulation(scratch, scratch + sizeof(buf), 100, 1);
+
+	WriteReg(UC_X86_REG_RAX, &orax);
+	WriteReg(UC_X86_REG_RDX, &ordx);
+	WriteReg(UC_X86_REG_RCX, &orcx);
+
+	RemoveMap(wrmap);
+	return success;
 }
 
 void Emulator::PushCall(uint64_t call_address)
@@ -160,6 +212,13 @@ void Emulator::HandleUserInput()
 			{
 				breakOnImport = !breakOnImport;
 				std::cout << "Break on Export:  " << (LPVOID)breakOnImport << std::endl;
+				continue;
+			}
+
+			if (input[1] == 'j')
+			{
+				breakOnJump = !breakOnJump;
+				std::cout << "Break on Jump:  " << (LPVOID)breakOnImport << std::endl;
 				continue;
 			}
 

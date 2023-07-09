@@ -41,7 +41,7 @@ public:
     EEmulatorType type;
 
     std::vector<uint64_t> emulator_breakpoints;
-    std::vector<EmulatorMap*> emulator_maps;
+    std::list<EmulatorMap*> emulator_maps;
     std::vector<uint64_t> callstack;
     std::unordered_map<std::string, ImportCallback> callbacks;
     
@@ -49,16 +49,22 @@ public:
     bool step;
     bool breakOnImport;
     bool useCallbacks;
+    bool breakOnRet;
+    bool breakOnJump;
 
     Emulator(Executable* exec, EEmulatorType EmulatorType);
 
-    bool AddMapping(uint64_t base_address, uint64_t size, uint32_t protect, const char* name);
+    EmulatorMap* AddMapping(uint64_t base_address, uint64_t size, uint32_t protect, const char* name);
 
-    bool AddMappingFromSource(uint64_t base_address, uint64_t map_size, void* source, uint64_t source_size, uint32_t protect, const char* name);
+    void RemoveMap(EmulatorMap *map);
 
-    bool AddExistingMapping(uint64_t base_address, void* source, uint64_t source_size, uint32_t protect, const char* name);
+    EmulatorMap* AddMappingFromSource(uint64_t base_address, uint64_t map_size, void* source, uint64_t source_size, uint32_t protect, const char* name);
+
+    EmulatorMap* AddExistingMapping(uint64_t base_address, void* source, uint64_t source_size, uint32_t protect, const char* name);
 
     bool WriteEmuMem(uint64_t base_address, void* source, uint64_t size);
+
+    EmulatorMap * GetMapFromName(const char * name);
 
     bool StartEmulation(uint64_t start, uint64_t end, uint64_t timeout, size_t count);
 
@@ -89,6 +95,8 @@ public:
     {
         uc_reg_write(uc, reg, value);
     }
+
+    bool WriteMSR(uint64_t reg, uint64_t value);
 
     void ReadReg(int reg, void *value)
     {
